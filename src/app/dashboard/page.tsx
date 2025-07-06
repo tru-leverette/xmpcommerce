@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import Dashboard from "./Dashboard";
 
 export default function DashboardWrapper() {
@@ -25,18 +26,18 @@ export default function DashboardWrapper() {
               <span className="block w-6 h-0.5 bg-gray-700 dark:bg-gray-200 mb-1"></span>
               <span className="block w-6 h-0.5 bg-gray-700 dark:bg-gray-200"></span>
             </button>
-            <a
+            <Link
               href="/dashboard"
               className="hidden md:inline text-gray-700 dark:text-gray-200 hover:underline font-medium"
             >
               Dashboard
-            </a>
-            <a
+            </Link>
+            <Link
               href="/"
               className="hidden md:inline text-gray-700 dark:text-gray-200 hover:underline font-medium"
             >
               Home
-            </a>
+            </Link>
           </div>
         </nav>
       </header>
@@ -64,13 +65,13 @@ export default function DashboardWrapper() {
               <span className="block w-6 h-0.5 bg-gray-700 dark:bg-gray-200 -rotate-45"></span>
             </button>
           </div>
-          <a
+          <Link
             href="/dashboard"
             className="text-gray-800 dark:text-gray-100 hover:underline font-medium"
             onClick={() => setMenuOpen(false)}
           >
             Overview
-          </a>
+          </Link>
           <a
             href="#profile"
             className="text-gray-700 dark:text-gray-300 hover:underline"
@@ -98,6 +99,15 @@ export default function DashboardWrapper() {
             <Dashboard />
           </div>
         </main>
+      </div>
+      <div className="flex justify-center items-center py-4">
+        <span className="text-gray-600 dark:text-gray-400">Don&apos;t have an account? </span>
+        <Link
+          href="/register"
+          className="ml-2 text-blue-600 dark:text-blue-400 hover:underline"
+        >
+          Sign up
+        </Link>
       </div>
     </div>
   );
