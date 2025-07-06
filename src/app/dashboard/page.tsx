@@ -101,7 +101,7 @@ export default function DashboardWrapper() {
         </main>
       </div>
       <div className="flex justify-center items-center py-4">
-        <span className="text-gray-600 dark:text-gray-400">Don&apos;t have an account? </span>
+        <span className="text-gray-600 dark:text-gray-400"> Have an account? </span>
         <Link
           href="/register"
           className="ml-2 text-blue-600 dark:text-blue-400 hover:underline"
@@ -109,8 +109,8 @@ export default function DashboardWrapper() {
           Sign up
         </Link>
       </div>
-      <p>It&apos;s easy to get started!</p>
-      <span>You&apos;re all set!</span>
+      <p>Easy to get started!</p>
+      <span> All set!</span>
     </div>
   );
 }
