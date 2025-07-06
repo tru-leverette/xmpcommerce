@@ -1,18 +1,7 @@
 
-
-import Image from "next/image";
-
 export default function Home() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-8 sm:p-20 font-[family-name:var(--font-geist-sans)] bg-white dark:bg-black">
-      <Image
-        className="dark:invert mb-8"
-        src="/next.svg"
-        alt="Next.js logo"
-        width={120}
-        height={25}
-        priority
-      />
       <h1 className="text-5xl font-bold text-center text-gray-900 dark:text-white mb-4">
         Coming Soon
       </h1>

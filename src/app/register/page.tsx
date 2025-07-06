@@ -3,8 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useRegistrationStore } from "@/store/useRegistrationStore";
 
 export default function RegisterPage() {
+  const {
+    loading,
+    message,
+    success,
+    reset,
+  } = useRegistrationStore();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -12,8 +19,9 @@ export default function RegisterPage() {
     password2: "",
     country: "",
   });
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+
   const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -22,42 +30,101 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setMessage("");
+    setError(""); // Clear previous error
     if (form.password !== form.password2) {
-      setMessage("Passwords do not match.");
-      setLoading(false);
+      setError("Passwords do not match.");
       return;
     }
     try {
-      const res = await fetch("http://localhost:5000/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+      await useRegistrationStore.getState().registerUser(form, () => {
+        reset();
+          router.push("/register/success");
       });
-      const data = await res.json();
-      if (res.ok) {
-        router.push("/register/success");
-      } else {
-        setMessage(data.error || "Registration failed.");
-      }
-    } catch {
-      setMessage("Something went wrong.");
+    } catch (err) {
+      setError("Registration failed. Please try again.");
     }
-    setLoading(false);
   };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-black p-8">
       {/* Loading Modal */}
       {loading && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center ${
+            success ? "bg-green-200 bg-opacity-80" : "bg-black bg-opacity-40"
+          }`}
+        >
           <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg px-8 py-6 flex flex-col items-center">
-            <svg className="animate-spin h-8 w-8 text-black dark:text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-            </svg>
-            <span className="text-lg font-medium text-gray-800 dark:text-gray-200">Registering...</span>
+            {!success ? (
+              // Spinner while registering
+              <>
+                <svg
+                  className="animate-spin h-8 w-8 mb-4 text-black dark:text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  ></circle>
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                  ></path>
+                </svg>
+                <span className="text-lg font-medium text-gray-800 dark:text-gray-200">
+                  Registering...
+                </span>
+              </>
+            ) : (
+              // Animated checkmark on success
+              <>
+                <svg
+                  className="h-16 w-16 mb-4 text-green-600"
+                  viewBox="0 0 52 52"
+                  fill="none"
+                >
+                  <circle
+                    cx="26"
+                    cy="26"
+                    r="25"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="opacity-20"
+                  />
+                  <path
+                    d="M14 27l7 7 17-17"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{
+                      strokeDasharray: 48,
+                      strokeDashoffset: 48,
+                      animation: "checkmark 1s forwards"
+                    }}
+                  />
+                </svg>
+                <span className="text-lg font-medium text-green-700 dark:text-green-400">
+                  Registration Successful!
+                </span>
+                <style jsx>{`
+                  @keyframes checkmark {
+                    to {
+                      stroke-dashoffset: 0;
+                    }
+                  }
+                `}</style>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -147,6 +214,9 @@ export default function RegisterPage() {
           </button>
           {message && (
             <div className="text-center text-sm text-red-600 dark:text-red-400 mt-2">{message}</div>
+          )}
+          {error && (
+            <div className="text-center text-sm text-red-600 dark:text-red-400 mt-2">{error}</div>
           )}
         </form>
         <div className="mt-6 text-center">
