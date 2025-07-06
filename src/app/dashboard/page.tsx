@@ -109,6 +109,8 @@ export default function DashboardWrapper() {
           Sign up
         </Link>
       </div>
+      <p>It&apos;s easy to get started!</p>
+      <span>You&apos;re all set!</span>
     </div>
   );
 }
