@@ -1,11 +1,20 @@
 import { create } from "zustand";
-import axios from "axios";
+import axios, { type AxiosError } from "axios";
+
+// Define a type for the registration form
+interface RegistrationForm {
+  name: string;
+  email: string;
+  password: string;
+  password2: string;
+  country: string;
+}
 
 interface RegistrationState {
     loading: boolean;
     message: string;
     success: boolean;
-    registerUser: (form: any, onSuccess: () => void) => Promise<void>;
+    registerUser: (form: RegistrationForm, onSuccess: () => void) => Promise<void>;
     setLoading: (loading: boolean) => void;
     setMessage: (message: string) => void;
     setSuccess: (success: boolean) => void;
@@ -34,16 +43,19 @@ export const useRegistrationStore = create<RegistrationState>((set) => ({
             } else {
                 set({ message: result.message || "Registration failed.", loading: false });
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
+            const err = error as AxiosError<{ message?: string }>;
+
             set({
-                message: error?.response?.data?.message || "Registration failed due to server error.",
+                message: err.response?.data?.message || "Registration failed due to server error.",
                 loading: false,
             });
         }
     },
 }));
 
-async function apiRegisterUser(data: any) {
+// And for the API function:
+async function apiRegisterUser(data: RegistrationForm) {
     console.log('hitting apiRegisterUser with data:', data);
     const res = await axios.post("http://localhost:5000/api/register", data);
     return { ok: res.status === 200, ...res.data };
