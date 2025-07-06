@@ -53,7 +53,7 @@ export default function LoginPage() {
             </>
           ) : (
             <>
-              <span className="text-gray-600 dark:text-gray-400">Don't have an account? </span>
+              <span className="text-gray-600 dark:text-gray-400">Do not have an account? </span>
               <button
                 className="text-blue-600 dark:text-blue-400 hover:underline"
                 onClick={() => setIsRegister(true)}

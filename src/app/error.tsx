@@ -19,7 +19,7 @@ export default function NotFound() {
                     Oops! The page you are looking for does not exist.
                 </p>
                 <p className="text-center text-gray-500 mb-6">
-                    It looks like you&apos;ve reached a page that doesn&apos;t exist or has been moved.
+                    It looks like you reached a page that does not exist or has been moved.
                 </p>
                 <Link
                     href="/"
