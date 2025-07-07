@@ -32,19 +32,20 @@ export const useRegistrationStore = create<RegistrationState>((set) => ({
     registerUser: async (form, onSuccess) => {
         set({ loading: true, success: false });
         try {
-            console.log('hitting registerUser with form:', form);
             const result = await apiRegisterUser(form);
             if (result.ok) {
                 set({ success: true });
                 setTimeout(() => {
-                    set({ loading: false });
                     onSuccess();
-                }, 2000); // 2 second delay
+                }, 2000)
             } else {
                 set({ message: result.message || "Registration failed.", loading: false });
             }
         } catch (error: unknown) {
             const err = error as AxiosError<{ message?: string }>;
+            console.log(err)
+            console.log(err.response)
+            console.log(err.response?.data)
 
             set({
                 message: err.response?.data?.message || "Registration failed due to server error.",
@@ -56,7 +57,6 @@ export const useRegistrationStore = create<RegistrationState>((set) => ({
 
 // And for the API function:
 async function apiRegisterUser(data: RegistrationForm) {
-    console.log('hitting apiRegisterUser with data:', data);
     const res = await axios.post("http://localhost:5000/api/register", data);
     return { ok: res.status === 200, ...res.data };
 }

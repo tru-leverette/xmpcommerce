@@ -11,6 +11,8 @@ export default function RegisterPage() {
     message,
     success,
     reset,
+    setLoading,
+    setMessage,
   } = useRegistrationStore();
   const [form, setForm] = useState({
     name: "",
@@ -37,8 +39,10 @@ export default function RegisterPage() {
     }
     try {
       await useRegistrationStore.getState().registerUser(form, () => {
-        reset();
-          router.push("/register/success");
+        router.push("/register/success");
+        setTimeout(() => {
+          reset();
+        }, 2000); // Reset after navigation and delay
       });
     } catch (err) {
       setError("Registration failed. Please try again.");
