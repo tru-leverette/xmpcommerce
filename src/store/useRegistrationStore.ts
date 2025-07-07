@@ -43,9 +43,6 @@ export const useRegistrationStore = create<RegistrationState>((set) => ({
             }
         } catch (error: unknown) {
             const err = error as AxiosError<{ message?: string }>;
-            console.log(err)
-            console.log(err.response)
-            console.log(err.response?.data)
 
             set({
                 message: err.response?.data?.message || "Registration failed due to server error.",
