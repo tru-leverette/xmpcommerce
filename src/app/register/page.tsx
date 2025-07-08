@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRegistrationStore } from "@/store/useRegistrationStore";
+import { useUserStore } from "@/store/useUserStore";
 
 export default function RegisterPage() {
   const {
@@ -11,7 +11,7 @@ export default function RegisterPage() {
     message,
     success,
     reset,
-  } = useRegistrationStore();
+  } = useUserStore();
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -36,7 +36,7 @@ export default function RegisterPage() {
       return;
     }
     try {
-      await useRegistrationStore.getState().registerUser(form, () => {
+      await useUserStore.getState().addUser(form, () => {
         router.push("/register/success");
         setTimeout(() => {
           reset();
