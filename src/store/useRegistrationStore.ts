@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import axios, { type AxiosError } from "axios";
 
+
 // Define a type for the registration form
 interface RegistrationForm {
   name: string;
@@ -20,6 +21,17 @@ interface RegistrationState {
     setSuccess: (success: boolean) => void;
     reset: () => void;
 }
+
+
+if(process.env.NEXT_PUBLIC_API_MODE !== "develop" && process.env.NEXT_PUBLIC_API_MODE !== "production") {
+    throw new Error("NEXT_PUBLIC_API_MODE must be set to 'develop' or 'production'");
+    
+}
+const baseURL: string = process.env.NEXT_PUBLIC_API_URL as string;
+
+const api = axios.create({
+  baseURL: baseURL,
+});
 
 export const useRegistrationStore = create<RegistrationState>((set) => ({
     loading: false,
@@ -54,6 +66,6 @@ export const useRegistrationStore = create<RegistrationState>((set) => ({
 
 // And for the API function:
 async function apiRegisterUser(data: RegistrationForm) {
-    const res = await axios.post("http://localhost:5000/api/register", data);
+    const res = await api.post("/register", data);
     return { ok: res.status === 200, ...res.data };
 }
