@@ -11,8 +11,6 @@ export default function RegisterPage() {
     message,
     success,
     reset,
-    setLoading,
-    setMessage,
   } = useRegistrationStore();
   const [form, setForm] = useState({
     name: "",
@@ -34,7 +32,7 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(""); // Clear previous error
     if (form.password !== form.password2) {
-      setError("Passwords do not match.");
+      setError("Passwords do not match."); 
       return;
     }
     try {
