@@ -133,7 +133,7 @@ export default function RegisterPage() {
       )}
       <div className="w-full max-w-md bg-gray-50 dark:bg-gray-900 rounded-lg shadow-md p-8">
         <h1 className="text-3xl font-bold mb-6 text-center text-gray-900 dark:text-white" style={{ color: "var(--color-plum)" }}>
-          Register User
+          Register User should change
         </h1>
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <input
