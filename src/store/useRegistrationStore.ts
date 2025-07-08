@@ -23,10 +23,7 @@ interface RegistrationState {
 }
 
 
-if(process.env.NEXT_PUBLIC_API_MODE !== "develop" && process.env.NEXT_PUBLIC_API_MODE !== "production") {
-    throw new Error("NEXT_PUBLIC_API_MODE must be set to 'develop' or 'production'");
-    
-}
+
 const baseURL: string = process.env.NEXT_PUBLIC_API_URL as string;
 
 const api = axios.create({
