@@ -1,27 +1,18 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-
-// Define protected routes (adjust as needed)
-const protectedRoutes = ['/dashboard', '/profile', '/user'];
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const isAuth = request.cookies.get("auth")?.value === "true";
+  const isHub = request.nextUrl.pathname.startsWith("/hub");
 
-  // Check if the route is protected
-  if (protectedRoutes.some(route => pathname.startsWith(route))) {
-    // Example: check for a cookie named "auth"
-    const isLoggedIn = request.cookies.get('auth')?.value;
-
-    if (!isLoggedIn) {
-      // Redirect to "You seem lost" page if not authenticated
-      return NextResponse.redirect(new URL('/lost', request.url));
-    }
+  if (isHub && !isAuth) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();
 }
 
-// Specify the matcher for which routes to run the middleware on
+// Optionally, only run on /hub routes:
 export const config = {
-  matcher: ['/dashboard/:path*', '/profile/:path*', '/user/:path*'],
+  matcher: ["/hub/:path*"],
 };

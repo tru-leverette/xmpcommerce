@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import axios, { isAxiosError } from "axios";
 import { useRouter } from "next/navigation";
 
@@ -12,6 +12,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  useEffect(() => {
+    // Example: check for an "auth" cookie
+    if (document.cookie.includes("auth=true")) {
+      router.replace("/hub");
+    }
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
@@ -19,7 +26,7 @@ export default function LoginPage() {
     try {
       const res = await axios.post("/api/auth/login", { email, password });
       if (res.data.success) {
-        router.push("/dashboard");
+        router.push("/hub");
       } else {
         setError(res.data.error || "Login failed.");
       }

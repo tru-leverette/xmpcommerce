@@ -13,7 +13,11 @@ export async function POST(req: NextRequest) {
 
   // Set the auth cookie
   const response = NextResponse.json({ success: true, message: 'Login successful' });
-  response.cookies.set('auth', 'true', { httpOnly: true, path: '/' });
+  response.cookies.set('auth', 'true', {
+    httpOnly: true,
+    path: '/',
+    maxAge: 60 * 60 * 3, // 3 hours in seconds
+  });
 
   return response;
 }
