@@ -1,13 +1,13 @@
 "use client";
 
-
 import React, { useState, FormEvent, ChangeEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+// import { useRouter } from "next/navigation";
 
 type LoginResponse = {
   success?: boolean;
   error?: string;
+  userId?: string;
 };
 
 export default function LoginForm(): React.JSX.Element {
@@ -15,7 +15,7 @@ export default function LoginForm(): React.JSX.Element {
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-  const router = useRouter();
+  // const router = useRouter();
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -29,13 +29,14 @@ export default function LoginForm(): React.JSX.Element {
         credentials: "same-origin",
       });
       const data: LoginResponse = await res.json();
-      if (data.success) {
-        router.push("/hub");
+      if (data.success && data.userId) {
+        window.localStorage.setItem("userId", data.userId);
+        window.location.href = `/hub/users/${data.userId}`;
       } else {
         setError(data.error || "Login failed.");
       }
     } catch (err: unknown) {
-        void err;
+      void err;
       setError("Login failed.");
     } finally {
       setLoading(false);

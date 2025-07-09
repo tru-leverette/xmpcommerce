@@ -11,13 +11,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
   }
 
-  // Set the auth cookie
-  const response = NextResponse.json({ success: true, message: 'Login successful' });
-  response.cookies.set('auth', 'true', {
-    httpOnly: true,
-    path: '/',
-    maxAge: 60 * 60 * 3, // 3 hours in seconds
-  });
+  const response = NextResponse.json({ success: true, userId: user.userId });
+  response.cookies.set('auth', 'true', { path: '/', httpOnly: true });
+  response.cookies.set('userId', user.userId, { path: '/', httpOnly: true });
 
   return response;
 }

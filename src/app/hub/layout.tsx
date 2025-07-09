@@ -6,10 +6,17 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 
 export default function HubLayout({ children }: { children: React.ReactNode }) {
+  const [userId, setUserId] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [avatarDropdown, setAvatarDropdown] = useState(false);
   const avatarRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setUserId(window.localStorage.getItem("userId"));
+    }
+  }, []);
 
   // Calculate the left margin based on menu state
   const mainMargin = menuOpen ? "ml-64" : "ml-16";
@@ -96,7 +103,7 @@ export default function HubLayout({ children }: { children: React.ReactNode }) {
         <div className="w-full h-0.5 bg-gray-200 shadow-md mb-4" />
         <nav className={`flex flex-col gap-4 w-full ${menuOpen ? "items-start px-2" : "items-center"}`}>
           <Link
-            href="/hub"
+            href={`/hub/users/${userId}`}
             className={`flex items-center gap-2 text-white hover:underline font-medium px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`}
             onClick={() => setMenuOpen(false)}
           >
@@ -104,11 +111,10 @@ export default function HubLayout({ children }: { children: React.ReactNode }) {
             <span className={`transition-all duration-300 ${menuOpen ? "inline" : "hidden"}`}>Dashboard</span>
           </Link>
           <Link
-            href="/hub/scavenger-status"
+            href={`/hub/users/${userId}/scavenger-status`}
             className={`flex items-center gap-2 text-white hover:underline px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`}
             onClick={() => setMenuOpen(false)}
           >
-            {/* Safari/compass icon */}
             <span aria-hidden="true">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
@@ -158,7 +164,7 @@ export default function HubLayout({ children }: { children: React.ReactNode }) {
             <span className={`transition-all duration-300 ${menuOpen ? "inline" : "hidden"}`}>Territory Board</span>
           </a>
           <a
-            href="#community"
+            href="/community"
             className={`flex items-center gap-2 text-white hover:underline px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`}
             onClick={() => setMenuOpen(false)}
           >
