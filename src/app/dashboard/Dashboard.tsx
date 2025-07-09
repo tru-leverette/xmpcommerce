@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function Dashboard() {
   return (
     <>
-      <h1 className="text-3xl font-bold mb-6 text-center text-gray-900 dark:text-white">
+      <h1 className="text-3xl font-bold mb-6 text-center text-gray-900 dark:text-white" style={{ color: "var(--color-plum)" }}>
         User Dashboard
       </h1>
       <p className="text-lg text-center text-gray-700 dark:text-gray-300 mb-8">
