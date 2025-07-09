@@ -10,6 +10,14 @@ export async function POST(req: NextRequest) {
   if (!user || !(await bcrypt.compare(password, user.password))) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
   }
-  // Set cookie/session/JWT here as needed
-  return NextResponse.json({ success: true, message: 'Login successful' });
+
+  // Set the auth cookie
+  const response = NextResponse.json({ success: true, message: 'Login successful' });
+  response.cookies.set('auth', 'true', {
+    httpOnly: true,
+    path: '/',
+    maxAge: 60 * 60 * 3, // 3 hours in seconds
+  });
+
+  return response;
 }

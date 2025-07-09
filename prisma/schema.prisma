@@ -21,4 +21,5 @@ model User {
   password  String
   country   String
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
 }
