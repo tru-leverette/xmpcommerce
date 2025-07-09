@@ -1,22 +1,39 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function HubLayout({ children }: { children: React.ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [avatarDropdown, setAvatarDropdown] = useState(false);
+  const avatarRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   // Calculate the left margin based on menu state
   const mainMargin = menuOpen ? "ml-64" : "ml-16";
-
 
   const handleLogout = async () => {
     // Optionally call your logout API to clear cookies/session
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
   };
+
+  // Close dropdown if clicked outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (avatarRef.current && !avatarRef.current.contains(event.target as Node)) {
+        setAvatarDropdown(false);
+      }
+    }
+    if (avatarDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [avatarDropdown]);
 
   return (
     <div id="participant-hub-wrapper" className="min-h-screen bg-white dark:bg-black flex flex-col">
@@ -168,12 +185,40 @@ export default function HubLayout({ children }: { children: React.ReactNode }) {
           }}
         >
           <span className="text-xl font-bold text-white">Participant Hub</span>
-          <button
-            onClick={handleLogout}
-            className="text-sm font-semibold text-white hover:underline ml-auto"
-          >
-            Log out
-          </button>
+          <div className="flex items-center">
+            <button
+              onClick={handleLogout}
+              className="text-sm font-semibold text-white hover:underline ml-4"
+              type="button"
+            >
+              Log out
+            </button>
+            <div
+              id="user-avatar"
+              className="ml-4 relative"
+              ref={avatarRef}
+            >
+              <Image
+                src="/avatars/pirate_treasure.png"
+                alt="User Avatar"
+                width={32}
+                height={32}
+                className="rounded-full border border-gray-300 cursor-pointer"
+                onClick={() => setAvatarDropdown((v) => !v)}
+              />
+              {avatarDropdown && (
+                <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-lg z-50">
+                  <a
+                    href="/settings"
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
+                    onClick={() => setAvatarDropdown(false)}
+                  >
+                    Settings
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         <main className="flex-1 flex flex-col">
           <div className="bg-gray-50 dark:bg-gray-900 rounded-lg shadow-md p-8 min-h-full w-full border-l-4 border-gray-300 dark:border-gray-700">
