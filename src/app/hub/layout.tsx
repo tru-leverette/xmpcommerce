@@ -30,7 +30,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
   const mainMargin = menuOpen ? "ml-64" : "ml-20";
 
   const handleLogout = async (): Promise<void> => {
-    await fetch("/api/auth/logout", { method: "POST" }); // This should clear cookies server-side
+    await fetch("/api/auth/logout", { method: "POST" }); // This clears cookies server-side
     window.localStorage.clear();
     router.push("/");
   };

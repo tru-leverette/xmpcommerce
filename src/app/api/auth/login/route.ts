@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
   });
   response.cookies.set('auth', 'true', { path: '/', httpOnly: true });
   response.cookies.set('userId', user.userId, { path: '/', httpOnly: true });
+  response.cookies.set('role', user.role, { path: '/', httpOnly: true });
 
   return response;
 }

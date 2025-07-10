@@ -16,7 +16,8 @@ export function middleware(request: NextRequest) {
 
   // Protect /adminHub
   if (isAdminHub && (role !== "ADMIN" && role !== "SUPERADMIN")) {
-    return NextResponse.redirect(new URL("/", request.url));
+    console.log(role)
+    return NextResponse.redirect(new URL(`/hub/users/${userId}`, request.url));
   }
 
   // Redirect authenticated users away from /login

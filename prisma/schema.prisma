@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,30 +8,36 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  userId    String   @unique
-  name      String
-  email     String   @unique
-  password  String
-  country   String
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            Int      @id @default(autoincrement())
+  userId        String   @unique
+  name          String
+  email         String   @unique
+  password      String
+  country       String
+  role          Role     @default(USER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relations
-  games     Game[]   @relation("UserGames")
-  launchedGames Game[] @relation("LaunchedGames")
+  games         Game[]   @relation("UserGames")
+  createdGames  Game[]   @relation("CreatedGames")
+  launchedGames Game[]   @relation("LaunchedGames")
 }
 
 model Game {
-  id        Int      @id @default(autoincrement())
-  gameId    String   @unique
-  name      String
-  status    GameStatus @default(PENDING)
-  createdAt DateTime @default(now())
-  launchedById Int?
-  launchedBy   User?   @relation("LaunchedGames", fields: [launchedById], references: [id])
-  participants User[]  @relation("UserGames")
+  id               Int      @id @default(autoincrement())
+  gameId           String   @unique
+  location         String   @unique
+  status           GameStatus @default(PENDING)
+  createdAt        DateTime @default(now())
+
+  createdById      Int
+  createdBy        User     @relation("CreatedGames", fields: [createdById], references: [id])
+
+  launchedById     Int?
+  launchedBy       User?    @relation("LaunchedGames", fields: [launchedById], references: [id])
+
+  participants     User[]   @relation("UserGames")
 }
 
 enum Role {
