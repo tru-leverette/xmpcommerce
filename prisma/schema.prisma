@@ -6,7 +6,6 @@
 
 generator client {
   provider = "prisma-client-js"
-  // output   = "../generated/prisma"
 }
 
 datasource db {
@@ -21,6 +20,34 @@ model User {
   email     String   @unique
   password  String
   country   String
+  role      Role     @default(USER)
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  games     Game[]   @relation("UserGames")
+  launchedGames Game[] @relation("LaunchedGames")
+}
+
+model Game {
+  id        Int      @id @default(autoincrement())
+  gameId    String   @unique
+  name      String
+  status    GameStatus @default(PENDING)
+  createdAt DateTime @default(now())
+  launchedById Int?
+  launchedBy   User?   @relation("LaunchedGames", fields: [launchedById], references: [id])
+  participants User[]  @relation("UserGames")
+}
+
+enum Role {
+  USER
+  ADMIN
+  SUPERADMIN
+}
+
+enum GameStatus {
+  PENDING
+  ACTIVE
+  FINISHED
 }
