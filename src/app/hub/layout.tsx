@@ -30,8 +30,8 @@ export default function HubLayout({ children }: { children: ReactNode }) {
   const mainMargin = menuOpen ? "ml-64" : "ml-20";
 
   const handleLogout = async (): Promise<void> => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    window.localStorage.removeItem("userId");
+    await fetch("/api/auth/logout", { method: "POST" }); // This should clear cookies server-side
+    window.localStorage.clear();
     router.push("/");
   };
 
@@ -213,6 +213,15 @@ export default function HubLayout({ children }: { children: ReactNode }) {
                   >
                     Settings
                   </a>
+                  {(typeof window !== "undefined" && (localStorage.getItem("role") === "ADMIN" || localStorage.getItem("role") === "SUPERADMIN")) && (
+                    <a
+                      href="/adminHub"
+                      className="block px-4 py-2 text-blue-700 dark:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-semibold"
+                      onClick={() => setAvatarDropdown(false)}
+                    >
+                      Admin Panel
+                    </a>
+                  )}
                 </div>
               )}
             </div>

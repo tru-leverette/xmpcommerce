@@ -3,12 +3,7 @@
 import React, { useState, FormEvent, ChangeEvent } from "react";
 import Link from "next/link";
 // import { useRouter } from "next/navigation";
-
-type LoginResponse = {
-  success?: boolean;
-  error?: string;
-  userId?: string;
-};
+import type { LoginResponse } from "@/types/auth";
 
 export default function LoginForm(): React.JSX.Element {
   const [email, setEmail] = useState<string>("");
@@ -29,9 +24,15 @@ export default function LoginForm(): React.JSX.Element {
         credentials: "same-origin",
       });
       const data: LoginResponse = await res.json();
-      if (data.success && data.userId) {
-        window.localStorage.setItem("userId", data.userId);
-        window.location.href = `/hub/users/${data.userId}`;
+      console.log("Login response:", data);
+      console.log("Login response:", data);
+      console.log("Login response:", data);
+      console.log("Login response:", data);
+      console.log("Login response:", data);
+      if (data.success && data.user) {
+        window.localStorage.setItem("userId", data.user.userId);
+        window.localStorage.setItem("role", data.user.role);
+        window.location.href = `/hub/users/${data.user.userId}`;
       } else {
         setError(data.error || "Login failed.");
       }
