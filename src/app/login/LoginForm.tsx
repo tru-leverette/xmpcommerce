@@ -24,11 +24,6 @@ export default function LoginForm(): React.JSX.Element {
         credentials: "same-origin",
       });
       const data: LoginResponse = await res.json();
-      console.log("Login response:", data);
-      console.log("Login response:", data);
-      console.log("Login response:", data);
-      console.log("Login response:", data);
-      console.log("Login response:", data);
       if (data.success && data.user) {
         window.localStorage.setItem("userId", data.user.userId);
         window.localStorage.setItem("role", data.user.role);

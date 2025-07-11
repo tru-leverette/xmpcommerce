@@ -19,7 +19,7 @@ model User {
   updatedAt     DateTime @updatedAt
 
   // Relations
-  games         Game[]   @relation("UserGames")
+  participants  Participant[]
   createdGames  Game[]   @relation("CreatedGames")
   launchedGames Game[]   @relation("LaunchedGames")
 }
@@ -37,7 +37,19 @@ model Game {
   launchedById     Int?
   launchedBy       User?    @relation("LaunchedGames", fields: [launchedById], references: [id])
 
-  participants     User[]   @relation("UserGames")
+  participants     Participant[]
+}
+
+model Participant {
+  id                Int         @id @default(autoincrement())
+  user              User        @relation(fields: [userId], references: [id])
+  userId            Int
+  game              Game        @relation(fields: [gameId], references: [id])
+  gameId            Int
+  registrationDate  DateTime    @default(now())
+  participantStatus ParticipantStatus @default(PENDING)
+
+  @@unique([userId, gameId])
 }
 
 enum Role {
@@ -50,4 +62,12 @@ enum GameStatus {
   PENDING
   ACTIVE
   FINISHED
+}
+
+enum ParticipantStatus {
+  PENDING
+  ACTIVE
+  ELIMINATED
+  FINISHED
+  DISQUALIFIED
 }
