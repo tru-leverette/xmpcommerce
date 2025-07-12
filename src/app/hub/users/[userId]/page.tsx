@@ -1,7 +1,9 @@
 import JoinGameWidget from "../JoinGameWidget";
+import ScavangerWidget from "../ScavangerWidget";
 
 const widgets = [
   <JoinGameWidget key="join" />,
+  <ScavangerWidget key="scavenger" />,
   // Add more widgets here
 ];
 
@@ -13,7 +15,7 @@ export default function Dashboard() {
       className={
         isSingle
           ? "flex justify-center items-center min-h-[300px] w-full"
-          : "flex flex-wrap gap-8 justify-center items-start w-full"
+          : "flex flex-wrap gap-8 justify-center items-stretch w-full"
       }
     >
       {widgets.map((widget, idx) => (
@@ -22,7 +24,7 @@ export default function Dashboard() {
           className={
             isSingle
               ? "w-full max-w-xl"
-              : "w-full sm:w-[350px] max-w-full flex-1"
+              : "w-full sm:w-[350px] max-w-full flex-1 h-full"
           }
         >
           {widget}

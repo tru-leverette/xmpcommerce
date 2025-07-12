@@ -2,7 +2,6 @@
 
 import React, { useState, FormEvent, ChangeEvent } from "react";
 import Link from "next/link";
-// import { useRouter } from "next/navigation";
 import type { LoginResponse } from "@/types/auth";
 
 export default function LoginForm(): React.JSX.Element {
@@ -10,7 +9,6 @@ export default function LoginForm(): React.JSX.Element {
   const [password, setPassword] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-  // const router = useRouter();
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
@@ -25,8 +23,13 @@ export default function LoginForm(): React.JSX.Element {
       });
       const data: LoginResponse = await res.json();
       if (data.success && data.user) {
-        window.localStorage.setItem("userId", data.user.userId);
-        window.localStorage.setItem("role", data.user.role);
+        window.localStorage.setItem("user", JSON.stringify({
+          userId: data.user.userId,
+          name: data.user.name,
+          email: data.user.email,
+          role: data.user.role,
+          // image: data.user?.image
+        }));
         window.location.href = `/hub/users/${data.user.userId}`;
       } else {
         setError(data.error || "Login failed.");
@@ -40,16 +43,16 @@ export default function LoginForm(): React.JSX.Element {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-black p-8">
-      <div className="w-full max-w-md bg-gray-50 dark:bg-gray-900 rounded-lg shadow-md p-8">
-        <h1 className="text-3xl font-bold mb-6 text-center text-gray-900 dark:text-white" style={{ color: "var(--color-plum)" }}>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-black p-4 sm:p-8">
+      <div className="w-full max-w-md bg-gray-50 dark:bg-gray-900 rounded-lg shadow-md p-4 sm:p-8">
+        <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-center text-gray-900 dark:text-white" style={{ color: "var(--color-plum)" }}>
           Login
         </h1>
         <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
           <input
             type="email"
             placeholder="Email"
-            className="px-4 py-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            className="px-4 py-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-base"
             required
             value={email}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
@@ -59,7 +62,7 @@ export default function LoginForm(): React.JSX.Element {
           <input
             type="password"
             placeholder="Password"
-            className="px-4 py-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
+            className="px-4 py-3 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-base"
             required
             value={password}
             onChange={(e: ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
@@ -71,17 +74,17 @@ export default function LoginForm(): React.JSX.Element {
           )}
           <button
             type="submit"
-            className="bg-black dark:bg-white text-white dark:text-black font-semibold py-3 rounded hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors"
+            className="bg-black dark:bg-white text-white dark:text-black font-semibold py-3 rounded hover:bg-gray-800 dark:hover:bg-gray-200 transition-colors text-base"
             disabled={loading}
           >
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
         <div className="mt-6 text-center">
-          <span className="text-gray-600 dark:text-gray-400">
+          <span className="text-gray-600 dark:text-gray-400 text-sm">
             Do not have an account?{" "}
           </span>
-          <Link href="/register" className="text-blue-600 dark:text-blue-400 hover:underline">
+          <Link href="/register" className="text-blue-600 dark:text-blue-400 hover:underline text-sm">
             Register
           </Link>
         </div>

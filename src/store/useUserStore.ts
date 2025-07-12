@@ -1,63 +1,46 @@
 import { create } from "zustand";
-import axios, { type AxiosError } from "axios";
-
+import { type AxiosError } from "axios";
+import type { User, UserRegistrationForm } from "@/types/auth";
+import { apiAddUser, apiDeleteUser, apiFindUser, apiUpdateUser } from "./userActions";
 
 // Define a User type for the registration form
-interface UserForm {
-  name: string;
-  email: string;
-  password: string;
-  password2: string;
-  country: string;
-}
 
 interface UserState {
-    loading: boolean;
-    message: string;
-    success: boolean;
-    addUser: (form: UserForm, onSuccess: () => void) => Promise<void>;
-    setLoading: (loading: boolean) => void;
-    setMessage: (message: string) => void;
-    setSuccess: (success: boolean) => void;
-    reset: () => void;
-    updateUser: (email: string, updateData: Partial<UserForm>, onSuccess?: () => void) => Promise<void>;
-}
-
-const baseURL: string = process.env.NEXT_PUBLIC_API_URL as string;
-
-const api = axios.create({
-  baseURL: baseURL,
-});
-
-async function apiAddUser(data: UserForm) {
-    const res = await api.post("/user", data);
-    return { ok: res.status === 200, ...res.data };
-}
-
-async function apiFindUser(email: string) {
-    const res = await api.get(`/user?email=${encodeURIComponent(email)}`);
-    return res.data;
-}
-
-async function apiDeleteUser(email: string) {
-  const res = await api.delete("/user", { data: { email } });
-  return res.data;
-}
-
-async function apiUpdateUser(email: string, updateData: Partial<UserForm>) {
-  const res = await api.patch("/user", { email, ...updateData });
-  return res.data;
+  loading: boolean;
+  message: string;
+  success: boolean;
+  user: User | null; // <-- add this
+  isRegistered: boolean; // <-- add this
+  setUser: (user: User) => void; // <-- add this
+  setIsRegistered: (isRegistered: boolean) => void; // <-- add this
+  clearUser: () => void; // <-- add this
+  addUser: (form: UserRegistrationForm, onSuccess: () => void) => Promise<void>;
+  setLoading: (loading: boolean) => void;
+  setMessage: (message: string) => void;
+  setSuccess: (success: boolean) => void;
+  reset: () => void;
+  updateUser: (email: string, updateData: Partial<UserRegistrationForm>, onSuccess?: () => void) => Promise<void>;
 }
 
 export const useUserStore = create<UserState>((set) => ({
-    loading: false,
-    message: "",
-    success: false,
-    setLoading: (loading) => set({ loading }),
-    setMessage: (message) => set({ message }),
-    setSuccess: (success) => set({ success }),
-    reset: () => set({ loading: false, message: "", success: false }),
-    addUser: async (form, onSuccess) => {
+  loading: false,
+  message: "",
+  success: false,
+  user: null,
+  isRegistered: false,
+  setUser: (user) => set({
+    user,
+    isRegistered: Array.isArray(user.participants)
+      ? user.participants.some((p) => p.participantStatus === "PENDING" || p.participantStatus === "ACTIVE")
+      : false,
+  }),
+  setIsRegistered: (isRegistered) => set({ isRegistered }),
+  clearUser: () => set({ user: null, isRegistered: false }),
+  setLoading: (loading) => set({ loading }),
+  setMessage: (message) => set({ message }),
+  setSuccess: (success) => set({ success }),
+  reset: () => set({ loading: false, message: "", success: false }),
+  addUser: async (form, onSuccess) => {
         set({ loading: true, success: false });
         try {
             const result = await apiAddUser(form);
@@ -80,7 +63,6 @@ export const useUserStore = create<UserState>((set) => ({
     findUser: async (email: string) => {
         try {
             const user = await apiFindUser(email);
-            // Do something with the user data
             set({ message: `User found: ${user.name}` });
         } catch (error: unknown) {
             const err = error as AxiosError<{ message?: string }>;
@@ -107,7 +89,7 @@ export const useUserStore = create<UserState>((set) => ({
             });
         }
     },
-    updateUser: async (email: string, updateData: Partial<UserForm>, onSuccess?: () => void) => {
+    updateUser: async (email: string, updateData: Partial<UserRegistrationForm>, onSuccess?: () => void) => {
         set({ loading: true, success: false });
         try {
             const result = await apiUpdateUser(email, updateData);

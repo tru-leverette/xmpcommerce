@@ -1,36 +1,42 @@
 "use client";
 
-import { useState, useRef, useEffect, ReactNode, MouseEvent as ReactMouseEvent } from "react";
+import { useState, useRef, useEffect, ReactNode } from "react";
+import { useUserStore } from "@/store/useUserStore";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
+type User = {
+  userId: string;
+  name: string;
+  email: string;
+  role: string;
+  image?: string;
+};
+
 export default function HubLayout({ children }: { children: ReactNode }) {
-  const [userId, setUserId] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
-  const [showNavText, setShowNavText] = useState<boolean>(false);
   const [avatarDropdown, setAvatarDropdown] = useState<boolean>(false);
   const avatarRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
   useEffect(() => {
-    setUserId(window.localStorage.getItem("userId"));
+    fetch("/api/auth/me", { credentials: "include" })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data?.user) {
+          setUser(data.user); // for local state if you still need it
+          useUserStore.getState().setUser(data.user); // hydrate Zustand
+        } else {
+          setUser(null);
+          useUserStore.getState().clearUser();
+        }
+      });
   }, []);
 
-  useEffect(() => {
-    let timeout: NodeJS.Timeout;
-    if (menuOpen) {
-      timeout = setTimeout(() => setShowNavText(true), 300);
-    } else {
-      setShowNavText(false);
-    }
-    return () => clearTimeout(timeout);
-  }, [menuOpen]);
-
-  const mainMargin = menuOpen ? "ml-64" : "ml-20";
-
   const handleLogout = async (): Promise<void> => {
-    await fetch("/api/auth/logout", { method: "POST" }); // This clears cookies server-side
+    await fetch("/api/auth/logout", { method: "POST" });
     window.localStorage.clear();
     router.push("/");
   };
@@ -49,159 +55,125 @@ export default function HubLayout({ children }: { children: ReactNode }) {
     };
   }, [avatarDropdown]);
 
-  return (
-    <div id="hub-wrapper" className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-100 to-blue-200 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 flex">
-      {/* Sidebar */}
-      <aside
-        className={`
-          shadow-2xl flex flex-col
-          z-50 left-0
-          transition-all duration-300
-          fixed
-          ${menuOpen ? "w-64" : "w-20"}
-          h-full
-          py-0
-          bg-gradient-to-b from-blue-700 via-blue-800 to-blue-900 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900
-        `}
-        style={{
-          left: 0,
-          top: 0,
-          cursor: !menuOpen ? "pointer" : "default",
-        }}
-        onClick={
-          !menuOpen
-            ? (e: ReactMouseEvent<HTMLDivElement>) => {
-                if (
-                  e.target instanceof HTMLElement &&
-                  !e.target.closest("a") &&
-                  !e.target.closest("button")
-                ) {
-                  setMenuOpen(true);
-                }
-              }
-            : undefined
-        }
+  // --- Mobile Side Nav Overlay ---
+  const MobileNav = () => (
+    <>
+      {/* Overlay */}
+      <div
+        className={`fixed inset-0 z-40 bg-black/40 transition-opacity duration-500 ${
+          menuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={() => setMenuOpen(false)}
+      />
+      {/* Side Nav */}
+      <nav
+        className={`fixed top-0 left-0 z-50 bg-gradient-to-b from-blue-900 to-cyan-800 shadow-xl w-64 h-full p-6
+        transform transition-transform duration-500 ease-in-out
+        ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}
       >
-        {/* Sidebar header */}
-        <div className="flex items-center justify-between w-full px-3 py-4 border-b border-blue-800 dark:border-gray-700">
-          <div className="flex items-center gap-2">
-            <span className="flex items-center justify-center w-10 h-10 rounded-full bg-sky-500 shadow-lg">
-              <span className="text-2xl font-black text-white">X</span>
-            </span>
-            <span className={`text-white font-extrabold text-lg tracking-wide select-none transition-all duration-300 ${menuOpen ? "inline" : "hidden"}`}>
-              XMPHONIC.
-            </span>
-          </div>
+        <div className="mb-10 flex items-center gap-3">
+          <span className="text-3xl">🦜</span>
+          <span className="text-white text-2xl font-extrabold tracking-wide">XMP</span>
+        </div>
+        <ul className="flex flex-col gap-4 text-blue-100 font-medium">
+          <li className="hover:bg-blue-700 rounded px-3 py-2 transition cursor-pointer">
+            <Link href={`/hub/users/${user?.userId ?? ""}`} onClick={() => setMenuOpen(false)}>
+              Dashboard
+            </Link>
+          </li>
+          <li className="hover:bg-blue-700 rounded px-3 py-2 transition cursor-pointer">
+            <Link href={`/hub/users/${user?.userId ?? ""}/scavenger`} onClick={() => setMenuOpen(false)}>
+              Scavenger Hunt
+            </Link>
+          </li>
+          <li className="hover:bg-blue-700 rounded px-3 py-2 transition cursor-pointer">
+            <a href="/community" onClick={() => setMenuOpen(false)}>
+              Community
+            </a>
+          </li>
+        </ul>
+        <div className="mt-auto pt-10">
           <button
-            className="flex flex-col justify-center items-center w-8 h-8 focus:outline-none hover:bg-blue-800 rounded transition"
-            aria-label={menuOpen ? "Collapse menu" : "Expand menu"}
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={handleLogout}
+            className="w-full bg-gradient-to-r from-cyan-400 to-blue-600 text-white font-bold py-2 rounded-full shadow hover:from-cyan-500 hover:to-blue-700 transition"
           >
-            <span aria-hidden="true">
-              {menuOpen ? (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              )}
-            </span>
+            Logout
           </button>
         </div>
-        {/* Nav links */}
-        <nav className={`flex flex-col gap-2 w-full mt-6 ${menuOpen ? "items-start px-3" : "items-center"}`}>
-          {userId && (
-            <>
-              <Link
-                href={`/hub/users/${userId}`}
-                className={`flex items-center gap-2 text-white hover:bg-blue-800 font-medium px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`}
-                onClick={() => setMenuOpen(false)}
-              >
-                <span aria-hidden="true">🏠</span>
-                {showNavText && <span className="transition-all duration-300">Dashboard</span>}
-              </Link>
-              <Link
-                href={`/hub/users/${userId}/scavenger`}
-                className={`flex items-center gap-2 text-white hover:bg-blue-800 px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`}
-                onClick={() => setMenuOpen(false)}
-              >
-                <span aria-hidden="true">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
-                    <path stroke="currentColor" strokeWidth="2" d="M16 8l-4 8-4-8 8 4-8-4z"/>
-                  </svg>
-                </span>
-                {showNavText && <span className="transition-all duration-300">Scavenger</span>}
-              </Link>
-            </>
-          )}
-          {/* Static links */}
-          <a href="#my-group" className={`flex items-center gap-2 text-white hover:bg-blue-800 px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`} onClick={() => setMenuOpen(false)}>
-            <span aria-hidden="true">👥</span>
-            {showNavText && <span>My Group</span>}
-          </a>
-          <a href="#badges-roles" className={`flex items-center gap-2 text-white hover:bg-blue-800 px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`} onClick={() => setMenuOpen(false)}>
-            <span aria-hidden="true">🎖️</span>
-            {showNavText && <span>Badges and Roles</span>}
-          </a>
-          <a href="#access-unlocks" className={`flex items-center gap-2 text-white hover:bg-blue-800 px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`} onClick={() => setMenuOpen(false)}>
-            <span aria-hidden="true">🔓</span>
-            {showNavText && <span>Access Unlocks</span>}
-          </a>
-          <a href="#merit-tracker" className={`flex items-center gap-2 text-white hover:bg-blue-800 px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`} onClick={() => setMenuOpen(false)}>
-            <span aria-hidden="true">📈</span>
-            {showNavText && <span>Merit Tracker</span>}
-          </a>
-          <a href="#territory-board" className={`flex items-center gap-2 text-white hover:bg-blue-800 px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`} onClick={() => setMenuOpen(false)}>
-            <span aria-hidden="true">🗺️</span>
-            {showNavText && <span>Territory Board</span>}
-          </a>
-          <a href="/community" className={`flex items-center gap-2 text-white hover:bg-blue-800 px-2 py-2 rounded transition-all duration-300 w-full ${menuOpen ? "justify-start" : "justify-center"}`} onClick={() => setMenuOpen(false)}>
-            <span aria-hidden="true">🌐</span>
-            {showNavText && <span>Community</span>}
-          </a>
-        </nav>
-      </aside>
-      {/* Overlay for mobile menu */}
-      {menuOpen && (
-        <div
-          className="fixed inset-0 bg-black bg-opacity-30 z-30 md:hidden"
-          onClick={() => setMenuOpen(false)}
-        />
-      )}
-      {/* Main content area */}
-      <div className={`flex flex-col transition-all duration-300 ${mainMargin} min-h-screen w-full`}>
+      </nav>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen flex flex-col sm:flex-row bg-white">
+      {/* Hamburger for mobile */}
+      <button
+        className="sm:hidden fixed top-4 left-4 z-50 bg-blue-900 text-white p-2 rounded-full shadow-lg"
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-label="Open navigation"
+      >
+        <svg width={28} height={28} fill="none" viewBox="0 0 24 24">
+          <rect y="4" width="24" height="2" rx="1" fill="currentColor" />
+          <rect y="11" width="24" height="2" rx="1" fill="currentColor" />
+          <rect y="18" width="24" height="2" rx="1" fill="currentColor" />
+        </svg>
+      </button>
+      {/* Mobile Side Nav */}
+      <MobileNav />
+      {/* Desktop Side Nav */}
+      <nav className="hidden sm:flex w-64 min-h-screen bg-gradient-to-b from-blue-900 to-cyan-800 shadow-xl flex-col px-6 py-8">
+        <div className="mb-10 flex items-center gap-3">
+          <span className="text-3xl">🦜</span>
+          <span className="text-white text-2xl font-extrabold tracking-wide">XMP</span>
+        </div>
+        <ul className="flex flex-col gap-4 text-blue-100 font-medium">
+          <li className="hover:bg-blue-700 rounded px-3 py-2 transition cursor-pointer">
+            <Link href={`/hub/users/${user?.userId ?? ""}`}>
+              Dashboard
+            </Link>
+          </li>
+          <li className="hover:bg-blue-700 rounded px-3 py-2 transition cursor-pointer">
+            <Link href={`/hub/users/${user?.userId ?? ""}/scavenger`}>
+              Scavenger Hunt
+            </Link>
+          </li>
+          <li className="hover:bg-blue-700 rounded px-3 py-2 transition cursor-pointer">
+            <a href="/community">
+              Community
+            </a>
+          </li>
+        </ul>
+        <div className="mt-auto pt-10">
+          <button
+            onClick={handleLogout}
+            className="w-full bg-gradient-to-r from-cyan-400 to-blue-600 text-white font-bold py-2 rounded-full shadow hover:from-cyan-500 hover:to-blue-700 transition"
+          >
+            Logout
+          </button>
+        </div>
+      </nav>
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col">
         {/* Header */}
-        <header
-          className="w-full flex items-center justify-between px-8 py-4 bg-white/80 dark:bg-gray-900/80 shadow-md sticky top-0 z-40"
-          style={{
-            minHeight: "64px",
-            backdropFilter: "blur(8px)",
-          }}
-        >
-          <div style={{ width: 120 }} />
-          <span className="text-2xl font-bold text-blue-900 dark:text-white mx-auto tracking-wide drop-shadow">Participant</span>
-          <div className="flex items-center">
-            <button
-              onClick={handleLogout}
-              className="text-sm font-semibold text-blue-700 dark:text-white hover:underline ml-4"
-              type="button"
-            >
-              Log out
-            </button>
+        <header className="w-full px-4 sm:px-8 py-4 sm:py-6 bg-gradient-to-r from-blue-900 to-cyan-800 shadow flex items-center justify-between">
+          <h1 id="hub-header" className="text-2xl font-bold text-white tracking-wide w-full text-center sm:text-left">
+            Hub
+          </h1>
+          <div className="flex items-center gap-4">
+            <span id="user-name" className="text-white font-medium hidden sm:inline whitespace-nowrap">
+              {user?.name ?? "User"}
+            </span>
             <div
               id="user-avatar"
               className="ml-4 relative"
               ref={avatarRef}
             >
               <Image
-                src="/avatars/pirate_treasure.png"
+                src={user?.image || "/avatars/pirate_treasure.png"}
                 alt="User Avatar"
-                width={36}
-                height={36}
-                className="rounded-full border-2 border-blue-300 dark:border-gray-700 cursor-pointer shadow"
+                width={72}
+                height={72}
+                className="rounded-full border-2 border-blue-300 dark:border-gray-700 cursor-pointer shadow w-[56px] sm:w-[72px] aspect-square object-cover"
                 onClick={() => setAvatarDropdown((v: boolean) => !v)}
               />
               {avatarDropdown && (
@@ -213,7 +185,7 @@ export default function HubLayout({ children }: { children: ReactNode }) {
                   >
                     Settings
                   </a>
-                  {(typeof window !== "undefined" && (localStorage.getItem("role") === "ADMIN" || localStorage.getItem("role") === "SUPERADMIN")) && (
+                  {(user?.role === "ADMIN" || user?.role === "SUPERADMIN") && (
                     <a
                       href="/adminHub"
                       className="block px-4 py-2 text-blue-700 dark:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-semibold"
@@ -227,8 +199,9 @@ export default function HubLayout({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="flex-1 flex flex-col pt-2">
-          <div className="bg-white/90 dark:bg-gray-900/90 rounded-lg shadow-md p-8 min-h-full w-full border-l-4 border-blue-200 dark:border-gray-700 mt-6">
+        {/* Page Content */}
+        <main className="flex-1 p-4 sm:p-8">
+          <div className="bg-white/90 dark:bg-gray-900/90  p-8 min-h-full w-full  mt-6">
             {children}
           </div>
         </main>

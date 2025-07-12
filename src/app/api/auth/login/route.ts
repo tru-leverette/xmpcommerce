@@ -6,7 +6,10 @@ const prisma = new PrismaClient();
 
 export async function POST(req: NextRequest) {
   const { email, password } = await req.json();
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findUnique({
+  where: { email },
+  select: { id: true, userId: true, role: true, name: true, email: true, password: true }
+});
   if (!user || !(await bcrypt.compare(password, user.password))) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
   }
@@ -14,13 +17,14 @@ export async function POST(req: NextRequest) {
   const response = NextResponse.json({
     success: true,
     user: {
+      id: user.id,
       userId: user.userId,
       role: user.role,
       name: user.name,
       email: user.email,
-      // add other fields as needed
     }
   });
+  response.cookies.set('userPk', String(user.id), { path: '/', httpOnly: true });
   response.cookies.set('auth', 'true', { path: '/', httpOnly: true });
   response.cookies.set('userId', user.userId, { path: '/', httpOnly: true });
   response.cookies.set('role', user.role, { path: '/', httpOnly: true });

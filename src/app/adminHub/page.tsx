@@ -3,21 +3,30 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { User } from "@/types/auth";
 
 export default function AdminPanel() {
+  const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    // Example: Check role from localStorage (replace with real auth in production)
-    const role = window.localStorage.getItem("role");
-  
-    if (role === "ADMIN" || role === "SUPERADMIN") {
-      setIsAdmin(true);
-    } else {
-      setIsAdmin(false);
-      router.replace("/");
-    }
+    fetch("/api/auth/me", { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        console.log(data)
+        if (!data?.user) {
+          router.replace("/login");
+          return;
+        }
+        setUser(data.user);
+        if (data.user.role === "ADMIN" || data.user.role === "SUPERADMIN") {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+          router.replace(`/hub/users/${data.user.userId}`);
+        }
+      });
   }, [router]);
 
   const handleLogout = async () => {
@@ -30,14 +39,18 @@ export default function AdminPanel() {
     return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
 
+  console.log("Admin:", isAdmin);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-900 via-blue-800 to-blue-700 flex flex-col items-center py-16">
       <h1 className="text-4xl font-bold text-white mb-8 drop-shadow">Admin Panel</h1>
       <div className="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl">
-        <h2 className="text-2xl font-semibold mb-4 text-blue-900">Welcome, Admin!</h2>
+        <h2 className="text-2xl font-semibold mb-4 text-blue-900">
+          Welcome, {user?.name ?? "Admin"}!
+        </h2>
         <ul className="space-y-4">
           <li>
-            {(typeof window !== "undefined" && localStorage.getItem("role") === "SUPERADMIN") && (
+            {(typeof window !== "undefined" && isAdmin) && (
               <Link
                 href="/adminHub/create-game"
                 className="block w-full px-4 py-2 bg-blue-700 text-white rounded hover:bg-blue-800 transition text-center"
