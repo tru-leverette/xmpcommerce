@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { comparePasswords, generateToken } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
+    // Import prisma dynamically to avoid build-time database connection issues
+    const { prisma } = await import('@/lib/prisma')
+    
     const { email, password } = await request.json()
 
     if (!email || !password) {
