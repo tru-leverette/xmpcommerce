@@ -2,16 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 // import { prisma } from '@/lib/prisma'
 // import { verifyToken, getTokenFromHeader } from '@/lib/auth'
 
-interface RouteParams {
-  params: {
-    gameId: string
-  }
-}
-
 // POST - Register for a game
-export async function POST(request: NextRequest, { params }: RouteParams) {
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ gameId: string }> }
+) {
   try {
-    const { gameId } = params
+    const { gameId } = await params
     const authHeader = request.headers.get('authorization')
     
     console.log('Registering for game:', gameId)
@@ -109,9 +106,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 }
 
 // GET - Get game participants (Admin only)
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ gameId: string }> }
+) {
   try {
-    const { gameId } = params
+    const { gameId } = await params
     const authHeader = request.headers.get('authorization')
     
     console.log('Getting participants for game:', gameId)

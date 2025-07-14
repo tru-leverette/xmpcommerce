@@ -2,16 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 // import { prisma } from '@/lib/prisma'
 // import { verifyToken, getTokenFromHeader } from '@/lib/auth'
 
-interface RouteParams {
-  params: {
-    userId: string
-  }
-}
-
 // PATCH - Ban/Unban user or change role (Admin/SuperAdmin only)
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
   try {
-    const { userId } = params
+    const { userId } = await params
     // Authentication would be checked here
     // const authHeader = request.headers.get('authorization')
     const { action, role } = await request.json()

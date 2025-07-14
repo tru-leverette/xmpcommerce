@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { hashPassword, generateToken } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
     console.log('=== REGISTRATION REQUEST START ===')
+    
+    // Import prisma dynamically to avoid build-time database connection issues
+    const { prisma } = await import('@/lib/prisma')
+    
     const { email, username, password } = await request.json()
     console.log('Request data:', { email, username, passwordLength: password?.length })
 
