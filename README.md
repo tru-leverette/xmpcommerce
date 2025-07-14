@@ -1,36 +1,63 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Treasure Hunt Platform
 
-## Getting Started
+A comprehensive location-based treasure hunt gaming platform with AI-powered clues, user management, and progressive gameplay mechanics.
 
-First, run the development server:
+## 🎮 Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+### Core Game Mechanics
+- **Location-Based Gameplay**: GPS-powered hunts that adapt to user location
+- **AI-Powered Clues**: Intelligent clue generation based on game theme and location
+- **Progressive Levels**: 12 levels, each with 4 stages containing 4-5 hunts with multiple clues
+- **Pebble Economy**: Earn and spend pebbles to access new stages and levels
+- **Multiple Submission Types**: Text answers, photo uploads, or combined challenges
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### User Management
+- **Role-Based Access**: USER, ADMIN, SUPERADMIN roles
+- **User Authentication**: Secure JWT-based authentication
+- **Account Status Management**: Active/Banned user states
+- **Participant Registration**: Game-specific participant registration
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Game Administration
+- **Game Lifecycle Management**: PENDING → UPCOMING → ACTIVE → COMPLETED
+- **Launch Date Control**: SuperAdmins can set game launch dates
+- **Participant Management**: Monitor and manage game participants
+- **User Administration**: Ban/unban users, promote to admin roles
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Progress Tracking
+- **Badge System**: Earn badges for completing stages and levels
+- **Wallet System**: Track pebble balance and transaction history
+- **Progress Monitoring**: Track current level, stage, hunt, and clue progress
+- **Completion Analytics**: Monitor user progress and engagement
 
-## Learn More
+## 🚀 Getting Started
 
-To learn more about Next.js, take a look at the following resources:
+### Prerequisites
+- Node.js 18+ and Yarn
+- MySQL database (local or AWS RDS)
+- MySQL Workbench (optional, for database management)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Installation
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. **Clone and Install Dependencies**
+   ```bash
+   yarn install
+   ```
 
-## Deploy on Vercel
+2. **Database Setup**
+   ```bash
+   # Configure your .env file with MySQL connection
+   DATABASE_URL="mysql://username:password@host:3306/database"
+   
+   # Generate Prisma client
+   yarn prisma generate
+   
+   # Push schema to database
+   yarn prisma db push
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+3. **Start Development Server**
+   ```bash
+   yarn dev
+   ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Visit http://localhost:3000 to see the application running!

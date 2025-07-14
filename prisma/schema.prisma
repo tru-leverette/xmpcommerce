@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  username     String        @unique
+  password     String
+  role         UserRole      @default(USER)
+  status       UserStatus    @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  createdGames Game[]
+  participants Participant[]
+
+  @@map("users")
+}
+
+model Game {
+  id           String        @id @default(cuid())
+  title        String
+  description  String
+  theme        String
+  status       GameStatus    @default(PENDING)
+  launchDate   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  creatorId    String
+  creator      User          @relation(fields: [creatorId], references: [id])
+  levels       Level[]
+  participants Participant[]
+
+  @@index([creatorId], map: "games_creatorId_fkey")
+  @@map("games")
+}
+
+model Level {
+  id          String   @id @default(cuid())
+  levelNumber Int
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  gameId      String
+  game        Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  stages      Stage[]
+
+  @@unique([gameId, levelNumber])
+  @@map("levels")
+}
+
+model Stage {
+  id                  String                @id @default(cuid())
+  stageNumber         Int
+  name                String
+  description         String?
+  requiredPebbles     Int                   @default(0)
+  badgeImage          String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  levelId             String
+  hunts               Hunt[]
+  participantProgress ParticipantProgress[]
+  level               Level                 @relation(fields: [levelId], references: [id], onDelete: Cascade)
+
+  @@unique([levelId, stageNumber])
+  @@map("stages")
+}
+
+model Hunt {
+  id          String   @id @default(cuid())
+  huntNumber  Int
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  stageId     String
+  clues       Clue[]
+  stage       Stage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@unique([stageId, huntNumber])
+  @@map("hunts")
+}
+
+model Clue {
+  id          String           @id @default(cuid())
+  clueNumber  Int
+  question    String
+  hint        String?
+  answer      String?
+  type        ClueType
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  huntId      String
+  submissions ClueSubmission[]
+  hunt        Hunt             @relation(fields: [huntId], references: [id], onDelete: Cascade)
+
+  @@unique([huntId, clueNumber])
+  @@map("clues")
+}
+
+model Participant {
+  id          String                @id @default(cuid())
+  status      ParticipantStatus     @default(ACTIVE)
+  pebbles     Int                   @default(0)
+  joinedAt    DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  userId      String
+  gameId      String
+  submissions ClueSubmission[]
+  progress    ParticipantProgress[]
+  game        Game                  @relation(fields: [gameId], references: [id])
+  user        User                  @relation(fields: [userId], references: [id])
+  wallet      Wallet?
+
+  @@unique([userId, gameId])
+  @@index([gameId], map: "participants_gameId_fkey")
+  @@map("participants")
+}
+
+model Wallet {
+  id            String        @id @default(cuid())
+  balance       Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  participantId String        @unique
+  transactions  Transaction[]
+  participant   Participant   @relation(fields: [participantId], references: [id])
+
+  @@map("wallets")
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  amount      Int
+  type        String
+  description String
+  createdAt   DateTime @default(now())
+  walletId    String
+  wallet      Wallet   @relation(fields: [walletId], references: [id])
+
+  @@index([walletId], map: "transactions_walletId_fkey")
+  @@map("transactions")
+}
+
+model ParticipantProgress {
+  id            String      @id @default(cuid())
+  currentLevel  Int         @default(1)
+  currentStage  Int         @default(1)
+  currentHunt   Int         @default(1)
+  currentClue   Int         @default(1)
+  isCompleted   Boolean     @default(false)
+  completedAt   DateTime?
+  lastLocation  Json?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  participantId String
+  stageId       String
+  badges        Badge[]
+  participant   Participant @relation(fields: [participantId], references: [id])
+  stage         Stage       @relation(fields: [stageId], references: [id])
+
+  @@unique([participantId, stageId])
+  @@index([stageId], map: "participant_progress_stageId_fkey")
+  @@map("participant_progress")
+}
+
+model Badge {
+  id          String              @id @default(cuid())
+  name        String
+  description String?
+  imageUrl    String?
+  earnedAt    DateTime            @default(now())
+  progressId  String
+  progress    ParticipantProgress @relation(fields: [progressId], references: [id])
+
+  @@index([progressId], map: "badges_progressId_fkey")
+  @@map("badges")
+}
+
+model ClueSubmission {
+  id             String      @id @default(cuid())
+  submissionType String
+  textAnswer     String?
+  photoUrl       String?
+  location       Json?
+  isCorrect      Boolean     @default(false)
+  aiAnalysis     String?
+  submittedAt    DateTime    @default(now())
+  participantId  String
+  clueId         String
+  clue           Clue        @relation(fields: [clueId], references: [id])
+  participant    Participant @relation(fields: [participantId], references: [id])
+
+  @@index([clueId], map: "clue_submissions_clueId_fkey")
+  @@index([participantId], map: "clue_submissions_participantId_fkey")
+  @@map("clue_submissions")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPERADMIN
+}
+
+enum GameStatus {
+  PENDING
+  UPCOMING
+  ACTIVE
+  COMPLETED
+}
+
+enum UserStatus {
+  ACTIVE
+  BANNED
+}
+
+enum ParticipantStatus {
+  ACTIVE
+  BANNED
+}
+
+enum ClueType {
+  TEXT_ANSWER
+  PHOTO_UPLOAD
+  COMBINED
+}
