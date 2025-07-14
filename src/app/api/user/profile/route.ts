@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { verifyToken } from '@/lib/auth'
 
 function getTokenFromHeader(authHeader: string | null): string | null {
@@ -11,6 +10,9 @@ function getTokenFromHeader(authHeader: string | null): string | null {
 
 export async function GET(request: NextRequest) {
   try {
+    // Import prisma dynamically to avoid build-time database connection issues
+    const { prisma } = await import('@/lib/prisma')
+    
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
     
