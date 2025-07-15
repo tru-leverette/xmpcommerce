@@ -1,8 +1,13 @@
 import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
-import { prisma } from './prisma'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
+
+// Lazy load prisma to avoid build-time database connections
+const getPrisma = async () => {
+  const { prisma } = await import('./prisma')
+  return prisma
+}
 
 export interface JWTPayload {
   userId: string
@@ -41,7 +46,8 @@ export const verifyTokenAndUser = async (token: string): Promise<JWTPayload> => 
     throw new Error('Token too old, please re-authenticate')
   }
   
-  // Then verify the user still exists in the database
+  // Lazy load prisma and verify user still exists in the database
+  const prisma = await getPrisma()
   const user = await prisma.user.findUnique({
     where: { id: decoded.userId },
     select: { id: true, email: true, role: true, status: true }
