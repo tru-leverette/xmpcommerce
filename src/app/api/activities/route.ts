@@ -5,6 +5,14 @@ import { verifyTokenAndUser, getTokenFromHeader } from '@/lib/auth'
 // GET all activities (admin only)
 export async function GET(request: NextRequest) {
   try {
+    // Skip database operations during build time
+    if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+      return NextResponse.json(
+        { error: 'Service temporarily unavailable' },
+        { status: 503 }
+      )
+    }
+
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
@@ -85,6 +93,14 @@ export async function GET(request: NextRequest) {
 // POST create new activity (internal use)
 export async function POST(request: NextRequest) {
   try {
+    // Skip database operations during build time
+    if (process.env.NODE_ENV === 'production' && !process.env.DATABASE_URL) {
+      return NextResponse.json(
+        { error: 'Service temporarily unavailable' },
+        { status: 503 }
+      )
+    }
+
     const { type, description, details, userId } = await request.json()
 
     if (!type || !description || !userId) {
