@@ -22,8 +22,13 @@ export default function Games() {
   const [games, setGames] = useState<Game[]>([])
   const [loading, setLoading] = useState(true)
   const [registering, setRegistering] = useState<string | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
 
   useEffect(() => {
+    // Check authentication status
+    const token = localStorage.getItem('token')
+    setIsAuthenticated(!!token)
+    
     fetchGames()
   }, [])
 
@@ -139,12 +144,12 @@ export default function Games() {
       <div className="bg-white shadow">
         <div className="container mx-auto px-4 py-6">
           <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-900">Treasure Hunt Games</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Scavenger Quest</h1>
             <Link 
-              href="/"
+              href={isAuthenticated ? "/dashboard" : "/"}
               className="text-blue-600 hover:text-blue-500 font-medium"
             >
-              ← Back to Home
+              ← {isAuthenticated ? "Back to Dashboard" : "Back to Home"}
             </Link>
           </div>
         </div>
@@ -173,7 +178,7 @@ export default function Games() {
                   
                   <div className="space-y-2 mb-4">
                     <div className="flex items-center text-sm text-gray-500">
-                      <span className="font-medium">Theme:</span>
+                      <span className="font-medium">Location:</span>
                       <span className="ml-2">{game.theme}</span>
                     </div>
                     <div className="flex items-center text-sm text-gray-500">

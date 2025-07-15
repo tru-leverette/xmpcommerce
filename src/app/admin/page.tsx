@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Link from 'next/link'
 
 interface User {
   id: string
@@ -104,31 +103,13 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white shadow">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-            <div className="flex space-x-4">
-              <Link 
-                href="/games"
-                className="text-blue-600 hover:text-blue-500 font-medium"
-              >
-                View Games
-              </Link>
-              <Link 
-                href="/"
-                className="text-blue-600 hover:text-blue-500 font-medium"
-              >
-                ← Back to Home
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Dashboard Content */}
       <div className="container mx-auto px-4 py-8">
+        {/* Page Title */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+          <p className="text-gray-600 mt-2">Manage users and system administration</p>
+        </div>
         {/* Stats Cards */}
         <div className="grid md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white rounded-lg shadow p-6">

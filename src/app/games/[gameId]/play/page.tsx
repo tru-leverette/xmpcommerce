@@ -185,7 +185,7 @@ export default function PlayGame() {
       <div className="bg-white shadow">
         <div className="container mx-auto px-4 py-6">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">Treasure Hunt</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Scavenger Hunt</h1>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">Clue #{currentClue.clueNumber}</span>
               {location && (
