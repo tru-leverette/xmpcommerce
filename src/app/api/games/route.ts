@@ -1,52 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
-// import { prisma } from '@/lib/prisma'
-// import { verifyToken, getTokenFromHeader } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { verifyToken, getTokenFromHeader } from '@/lib/auth'
+import bcrypt from 'bcryptjs'
 
 // GET all games (public - for viewing available games)
 export async function GET() {
   try {
-    // const games = await prisma.game.findMany({
-    //   include: {
-    //     creator: {
-    //       select: {
-    //         username: true
-    //       }
-    //     },
-    //     _count: {
-    //       select: {
-    //         participants: true
-    //       }
-    //     }
-    //   },
-    //   orderBy: {
-    //     createdAt: 'desc'
-    //   }
-    // })
-
-    const mockGames = [
-      {
-        id: '1',
-        title: 'African Adventure',
-        description: 'Explore the wonders of Africa through challenging hunts',
-        theme: 'Africa',
-        status: 'UPCOMING',
-        launchDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-        creator: { username: 'admin' },
-        _count: { participants: 25 }
+    const games = await prisma.game.findMany({
+      include: {
+        creator: {
+          select: {
+            username: true
+          }
+        },
+        _count: {
+          select: {
+            participants: true
+          }
+        }
       },
-      {
-        id: '2',
-        title: 'Ancient Egypt Quest',
-        description: 'Uncover the mysteries of ancient Egypt',
-        theme: 'Ancient Egypt',
-        status: 'ACTIVE',
-        launchDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // 3 days ago
-        creator: { username: 'admin' },
-        _count: { participants: 150 }
+      orderBy: {
+        createdAt: 'desc'
       }
-    ]
+    })
 
-    return NextResponse.json({ games: mockGames })
+    return NextResponse.json({ games })
 
   } catch (error) {
     console.error('Error fetching games:', error)
@@ -60,64 +38,108 @@ export async function GET() {
 // POST create new game (SuperAdmin only)
 export async function POST(request: NextRequest) {
   try {
-    // Authentication would be checked here
-    // const authHeader = request.headers.get('authorization')
-    // const token = getTokenFromHeader(authHeader)
+    // Authentication check
+    const authHeader = request.headers.get('authorization')
+    const token = getTokenFromHeader(authHeader)
     
-    // if (!token) {
-    //   return NextResponse.json(
-    //     { error: 'Authentication required' },
-    //     { status: 401 }
-    //   )
-    // }
-
-    // const decoded = verifyToken(token)
-    
-    // if (decoded.role !== 'SUPERADMIN') {
-    //   return NextResponse.json(
-    //     { error: 'Insufficient permissions' },
-    //     { status: 403 }
-    //   )
-    // }
-
-    const { title, description, theme } = await request.json()
-
-    if (!title || !description || !theme) {
+    if (!token) {
       return NextResponse.json(
-        { error: 'Title, description, and theme are required' },
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
+    }
+
+    const decoded = verifyToken(token)
+    
+    if (decoded.role !== 'SUPERADMIN') {
+      return NextResponse.json(
+        { error: 'Insufficient permissions' },
+        { status: 403 }
+      )
+    }
+
+    const { title, theme, launchDate, password } = await request.json()
+
+    if (!title || !theme) {
+      return NextResponse.json(
+        { error: 'Title and location are required' },
         { status: 400 }
       )
     }
 
-    // const game = await prisma.game.create({
-    //   data: {
-    //     title,
-    //     description,
-    //     theme,
-    //     creatorId: decoded.userId,
-    //     status: 'PENDING'
-    //   },
-    //   include: {
-    //     creator: {
-    //       select: {
-    //         username: true
-    //       }
-    //     }
-    //   }
-    // })
-
-    const mockGame = {
-      id: 'new-game-id',
-      title,
-      description,
-      theme,
-      status: 'PENDING',
-      creator: { username: 'admin' }
+    if (!password) {
+      return NextResponse.json(
+        { error: 'Password is required' },
+        { status: 400 }
+      )
     }
+
+    // Verify password by checking current user
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId }
+    })
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, user.password)
+
+    if (!isPasswordValid) {
+      return NextResponse.json(
+        { error: 'Invalid password' },
+        { status: 401 }
+      )
+    }
+
+    // Check if there's already an active game on this continent
+    const existingGame = await prisma.game.findFirst({
+      where: {
+        theme: theme,
+        status: {
+          in: ['UPCOMING', 'ACTIVE']
+        }
+      }
+    })
+
+    if (existingGame) {
+      return NextResponse.json(
+        { error: `A game is already active or scheduled for ${theme}. Only one game per continent is allowed at a time.` },
+        { status: 409 }
+      )
+    }
+
+    // Create the game in the database
+    const game = await prisma.game.create({
+      data: {
+        title,
+        description: '', // Empty description as we removed this field from the form
+        theme,
+        creatorId: decoded.userId,
+        status: 'UPCOMING',
+        launchDate: launchDate ? new Date(launchDate) : null
+      },
+      include: {
+        creator: {
+          select: {
+            username: true
+          }
+        },
+        _count: {
+          select: {
+            participants: true
+          }
+        }
+      }
+    })
 
     return NextResponse.json({
       message: 'Game created successfully',
-      game: mockGame
+      game
     })
 
   } catch (error) {
