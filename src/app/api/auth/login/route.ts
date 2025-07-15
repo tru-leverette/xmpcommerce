@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { comparePasswords, generateToken } from '@/lib/auth'
+
+// Dynamic route configuration to prevent static generation
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+// Lazy load dependencies to avoid build-time issues
+const loadDependencies = async () => {
+  const { prisma } = await import('@/lib/prisma')
+  const { comparePasswords, generateToken } = await import('@/lib/auth')
+  return { prisma, comparePasswords, generateToken }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    // Import prisma dynamically to avoid build-time database connection issues
-    const { prisma } = await import('@/lib/prisma')
+    const { prisma, comparePasswords, generateToken } = await loadDependencies()
     
     const { email, password } = await request.json()
 
@@ -51,6 +60,25 @@ export async function POST(request: NextRequest) {
       email: user.email,
       role: user.role
     })
+
+    // Log the login activity
+    try {
+      await prisma.activity.create({
+        data: {
+          type: 'USER_LOGIN',
+          description: `User ${user.username} logged in`,
+          userId: user.id,
+          details: {
+            email: user.email,
+            role: user.role,
+            loginTime: new Date().toISOString()
+          }
+        }
+      })
+    } catch (activityError) {
+      console.error('Failed to log login activity:', activityError)
+      // Don't fail the login if activity logging fails
+    }
 
     return NextResponse.json({
       message: 'Login successful',

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
+import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
 
 interface Clue {
   id: string
@@ -19,7 +20,7 @@ interface Submission {
   pebblesEarned: number
 }
 
-export default function PlayGame() {
+function PlayGame() {
   const params = useParams()
   const gameId = params.gameId as string
   
@@ -185,7 +186,7 @@ export default function PlayGame() {
       <div className="bg-white shadow">
         <div className="container mx-auto px-4 py-6">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-900">Treasure Hunt</h1>
+            <h1 className="text-2xl font-bold text-gray-900">Scavenger Hunt</h1>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-600">Clue #{currentClue.clueNumber}</span>
               {location && (
@@ -300,5 +301,14 @@ export default function PlayGame() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Wrap the component with ProtectedRouteGuard
+export default function ProtectedPlayGame() {
+  return (
+    <ProtectedRouteGuard>
+      <PlayGame />
+    </ProtectedRouteGuard>
   )
 }

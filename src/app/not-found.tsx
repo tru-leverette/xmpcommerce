@@ -15,7 +15,7 @@ export default function NotFound() {
       <div className="relative z-10 flex items-center justify-center min-h-screen px-4 py-12">
         <div className="max-w-2xl mx-auto text-center">
           
-          {/* Large 404 with treasure map styling */}
+          {/* Large 404 with adventure map styling */}
           <div className="mb-8">
             <div className="relative">
               <h1 className="text-9xl md:text-[12rem] font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 leading-none">
@@ -27,7 +27,7 @@ export default function NotFound() {
             </div>
           </div>
 
-          {/* Treasure chest and compass */}
+          {/* Adventure chest and compass */}
           <div className="mb-8 flex justify-center items-center space-x-6">
             <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-lg flex items-center justify-center shadow-xl transform rotate-3">
               <span className="text-3xl">🗝️</span>
@@ -46,7 +46,7 @@ export default function NotFound() {
               Lost at Sea? 🏴‍☠️
             </h2>
             <p className="text-xl text-blue-100 mb-2">
-              Ahoy! The treasure you seek has sailed to distant waters.
+              Ahoy! The adventure you seek has sailed to distant waters.
             </p>
             <p className="text-blue-200/80">
               This page seems to have been lost in the depths of the digital ocean.
@@ -72,7 +72,7 @@ export default function NotFound() {
             >
               <div className="flex items-center justify-center space-x-2">
                 <span className="text-xl">🎮</span>
-                <span>Treasure Hunts</span>
+                <span>Scavenger Hunts</span>
               </div>
               <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             </Link>
@@ -89,13 +89,13 @@ export default function NotFound() {
             </Link>
           </div>
 
-          {/* Treasure tip card */}
+          {/* Adventure tip card */}
           <div className="bg-gradient-to-r from-yellow-400/10 to-orange-500/10 backdrop-blur-sm border border-yellow-400/20 rounded-2xl p-6 shadow-xl">
             <div className="flex items-center justify-center mb-3">
               <div className="w-12 h-12 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center mr-3">
                 <span className="text-2xl">�</span>
               </div>
-              <h3 className="text-xl font-bold text-yellow-300">Treasure Hunter&apos;s Wisdom</h3>
+              <h3 className="text-xl font-bold text-yellow-300">Adventurer&apos;s Wisdom</h3>
             </div>
             <p className="text-yellow-100/90 text-center">
               &quot;Not all who wander are lost, but sometimes even the best navigators need to recalibrate their compass.&quot;

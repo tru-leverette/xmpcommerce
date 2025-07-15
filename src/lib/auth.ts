@@ -3,10 +3,18 @@ import bcrypt from 'bcryptjs'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
 
+// Lazy load prisma to avoid build-time database connections
+const getPrisma = async () => {
+  const { prisma } = await import('./prisma')
+  return prisma
+}
+
 export interface JWTPayload {
   userId: string
   email: string
   role: 'USER' | 'ADMIN' | 'SUPERADMIN'
+  iat?: number // Issued at timestamp
+  exp?: number // Expiration timestamp
 }
 
 export const hashPassword = async (password: string): Promise<string> => {
@@ -26,6 +34,39 @@ export const generateToken = (payload: JWTPayload): string => {
 
 export const verifyToken = (token: string): JWTPayload => {
   return jwt.verify(token, JWT_SECRET) as JWTPayload
+}
+
+export const verifyTokenAndUser = async (token: string): Promise<JWTPayload> => {
+  // First verify the JWT signature and expiration
+  const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload
+  
+  // Security: Check for token reuse/replay attacks
+  const tokenAge = Date.now() / 1000 - (decoded.iat || 0)
+  if (tokenAge > 7 * 24 * 60 * 60) { // 7 days max
+    throw new Error('Token too old, please re-authenticate')
+  }
+  
+  // Lazy load prisma and verify user still exists in the database
+  const prisma = await getPrisma()
+  const user = await prisma.user.findUnique({
+    where: { id: decoded.userId },
+    select: { id: true, email: true, role: true, status: true }
+  })
+  
+  if (!user) {
+    throw new Error('User no longer exists')
+  }
+  
+  if (user.status === 'BANNED') {
+    throw new Error('User account is banned')
+  }
+  
+  // Security: Always return database values, never trust token claims
+  return {
+    userId: user.id,
+    email: user.email,
+    role: user.role
+  }
 }
 
 export const getTokenFromHeader = (authHeader: string | null): string | null => {

@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { hashPassword, generateToken } from '@/lib/auth'
+
+// Dynamic route configuration to prevent static generation
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+// Lazy load dependencies to avoid build-time issues
+const loadDependencies = async () => {
+  const { prisma } = await import('@/lib/prisma')
+  const { hashPassword, generateToken } = await import('@/lib/auth')
+  return { prisma, hashPassword, generateToken }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('=== REGISTRATION REQUEST START ===')
+    const { prisma, hashPassword, generateToken } = await loadDependencies()
     
-    // Import prisma dynamically to avoid build-time database connection issues
-    const { prisma } = await import('@/lib/prisma')
+    console.log('=== REGISTRATION REQUEST START ===')
     
     const { email, username, password } = await request.json()
     console.log('Request data:', { email, username, passwordLength: password?.length })
@@ -55,6 +64,26 @@ export async function POST(request: NextRequest) {
       }
     })
     console.log('User created successfully:', { id: user.id, email: user.email, username: user.username })
+
+    // Log registration activity
+    try {
+      await prisma.activity.create({
+        data: {
+          type: 'USER_REGISTERED',
+          description: `New user registered: ${username}`,
+          userId: user.id,
+          details: {
+            email: email,
+            username: username,
+            registeredAt: new Date().toISOString()
+          }
+        }
+      })
+      console.log('Registration activity logged successfully')
+    } catch (activityError) {
+      console.error('Failed to log registration activity:', activityError)
+      // Continue with registration even if activity logging fails
+    }
 
     // Generate JWT token
     console.log('Generating JWT token...')

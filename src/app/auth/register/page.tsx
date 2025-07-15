@@ -45,6 +45,10 @@ export default function Register() {
       if (response.ok) {
         // Store token and redirect
         localStorage.setItem('token', data.token || 'mock-token')
+        
+        // Dispatch custom event to notify Navigation component
+        window.dispatchEvent(new Event('authChange'))
+        
         router.push('/dashboard')
       } else {
         setError(data.error || 'Registration failed')

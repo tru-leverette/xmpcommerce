@@ -1,6 +1,6 @@
-# Treasure Hunt Platform
+# Scavenger Hunt Platform
 
-A comprehensive location-based treasure hunt gaming platform with AI-powered clues, user management, and progressive gameplay mechanics.
+A comprehensive location-based scavenger hunt gaming platform with AI-powered clues, user management, and progressive gameplay mechanics.
 
 ## 🎮 Features
 

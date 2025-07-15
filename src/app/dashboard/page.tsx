@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
@@ -47,7 +46,6 @@ export default function UserDashboard() {
   const [badges, setBadges] = useState<Badge[]>([])
   const [loading, setLoading] = useState(true)
   const [totalPebbles, setTotalPebbles] = useState(0)
-  const router = useRouter()
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -107,11 +105,6 @@ export default function UserDashboard() {
     fetchDashboardData()
   }, [])
 
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    router.push('/')
-  }
-
   if (loading) {
     return (
       <ProtectedRouteGuard>
@@ -128,33 +121,15 @@ export default function UserDashboard() {
   return (
     <ProtectedRouteGuard>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Header */}
-      <div className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Welcome back, {user?.username || 'User'}!
-              </h1>
-              <p className="text-gray-600">Ready for your next treasure hunt adventure?</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Link
-                href="/games"
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Browse Games
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Logout
-              </button>
-            </div>
+        {/* Welcome Section */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4">
+          <div className="text-center">
+            <h1 className="text-3xl font-bold text-gray-900">
+              Welcome back, {user?.username || 'User'}!
+            </h1>
+            <p className="text-gray-600 mt-2">Ready for your next scavenger hunt adventure?</p>
           </div>
         </div>
-      </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Overview */}
@@ -323,7 +298,7 @@ export default function UserDashboard() {
         {/* Quick Actions */}
         <div className="mt-8 bg-white rounded-lg shadow p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Link
               href="/games"
               className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -333,20 +308,7 @@ export default function UserDashboard() {
               </div>
               <div>
                 <h3 className="font-medium text-gray-900">Browse Games</h3>
-                <p className="text-sm text-gray-500">Find new treasure hunts</p>
-              </div>
-            </Link>
-
-            <Link
-              href="/profile"
-              className="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-                <span className="text-green-600 text-xl">👤</span>
-              </div>
-              <div>
-                <h3 className="font-medium text-gray-900">Edit Profile</h3>
-                <p className="text-sm text-gray-500">Update your information</p>
+                <p className="text-sm text-gray-500">Find new scavenger hunts</p>
               </div>
             </Link>
 
