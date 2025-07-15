@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { hashPassword, generateToken } from '@/lib/auth'
+
+// Dynamic route configuration to prevent static generation
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+// Lazy load dependencies to avoid build-time issues
+const loadDependencies = async () => {
+  const { prisma } = await import('@/lib/prisma')
+  const { hashPassword, generateToken } = await import('@/lib/auth')
+  return { prisma, hashPassword, generateToken }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('=== REGISTRATION REQUEST START ===')
+    const { prisma, hashPassword, generateToken } = await loadDependencies()
     
-    // Import prisma dynamically to avoid build-time database connection issues
-    const { prisma } = await import('@/lib/prisma')
+    console.log('=== REGISTRATION REQUEST START ===')
     
     const { email, username, password } = await request.json()
     console.log('Request data:', { email, username, passwordLength: password?.length })

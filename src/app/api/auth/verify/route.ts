@@ -1,9 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyTokenAndUser, getTokenFromHeader } from '@/lib/auth'
+
+// Dynamic route configuration to prevent static generation
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+// Lazy load dependencies to avoid build-time issues
+const loadDependencies = async () => {
+  const { verifyTokenAndUser, getTokenFromHeader } = await import('@/lib/auth')
+  return { verifyTokenAndUser, getTokenFromHeader }
+}
 
 // GET - Verify if user token is still valid
 export async function GET(request: NextRequest) {
   try {
+    const { verifyTokenAndUser, getTokenFromHeader } = await loadDependencies()
+    
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
     
