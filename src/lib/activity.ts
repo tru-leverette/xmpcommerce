@@ -4,6 +4,8 @@ export type ActivityType =
   | 'GAME_CREATED'
   | 'GAME_UPDATED' 
   | 'GAME_DELETED'
+  | 'GAME_REGISTERED'
+  | 'USER_REGISTERED'
   | 'USER_UPDATED'
   | 'USER_LOGIN'
   | 'USER_LOGOUT'
