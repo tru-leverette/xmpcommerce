@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter, usePathname } from 'next/navigation'
+import { useTabSecurity } from '@/lib/hooks/useTabSecurity'
 
 export default function Navigation() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -14,6 +15,9 @@ export default function Navigation() {
   const router = useRouter()
   const pathname = usePathname()
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Add tab security monitoring at component level
+  useTabSecurity()
 
   useEffect(() => {
     setMounted(true)
@@ -31,19 +35,11 @@ export default function Navigation() {
           setUserName(payload.username || payload.email || 'User')
           console.log('User role from token:', payload.role)
         } catch {
-          // If token parsing fails, check for stored user data
-          const storedUser = localStorage.getItem('user')
-          if (storedUser) {
-            const userData = JSON.parse(storedUser)
-            setUserRole(userData.role || 'USER')
-            setUserName(userData.username || userData.email || 'User')
-            console.log('User role from storage:', userData.role)
-          } else {
-            // Fallback - you might want to set SUPERADMIN for testing
-            setUserRole('SUPERADMIN') // Change this back to 'USER' for production
-            setUserName('Admin User')
-            console.log('User role fallback: SUPERADMIN')
-          }
+          // If token parsing fails, treat as unauthenticated
+          setIsAuthenticated(false)
+          setUserRole(null)
+          setUserName('')
+          console.log('Token parsing failed - user unauthenticated')
         }
       } else {
         setIsAuthenticated(false)

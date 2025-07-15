@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
             currentStage: true,
             currentHunt: true,
             currentClue: true,
-            isCompleted: true,
+            isStageCompleted: true,
+            isLevelCompleted: true,
             completedAt: true
           }
         }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { verifyToken, getTokenFromHeader } from '@/lib/auth'
+import { verifyTokenAndUser, getTokenFromHeader } from '@/lib/auth'
 
 // GET all activities (admin only)
 export async function GET(request: NextRequest) {
@@ -22,12 +22,12 @@ export async function GET(request: NextRequest) {
 
     let decoded
     try {
-      decoded = verifyToken(token)
-      console.log('Activities API - Decoded token:', { userId: decoded.userId, role: decoded.role })
+      decoded = await verifyTokenAndUser(token)
+      console.log('Activities API - Verified user:', { userId: decoded.userId, role: decoded.role })
     } catch (tokenError) {
-      console.log('Activities API - Token verification failed:', tokenError)
+      console.log('Activities API - Token/User verification failed:', tokenError)
       return NextResponse.json(
-        { error: 'Invalid token' },
+        { error: 'Invalid token or user no longer exists' },
         { status: 401 }
       )
     }

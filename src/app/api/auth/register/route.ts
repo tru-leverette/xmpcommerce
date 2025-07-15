@@ -56,6 +56,26 @@ export async function POST(request: NextRequest) {
     })
     console.log('User created successfully:', { id: user.id, email: user.email, username: user.username })
 
+    // Log registration activity
+    try {
+      await prisma.activity.create({
+        data: {
+          type: 'USER_REGISTERED',
+          description: `New user registered: ${username}`,
+          userId: user.id,
+          details: {
+            email: email,
+            username: username,
+            registeredAt: new Date().toISOString()
+          }
+        }
+      })
+      console.log('Registration activity logged successfully')
+    } catch (activityError) {
+      console.error('Failed to log registration activity:', activityError)
+      // Continue with registration even if activity logging fails
+    }
+
     // Generate JWT token
     console.log('Generating JWT token...')
     const token = generateToken({

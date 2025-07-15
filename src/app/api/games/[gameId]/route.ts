@@ -6,9 +6,10 @@ import bcrypt from 'bcryptjs'
 // PUT update existing game (SuperAdmin only)
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { gameId: string } }
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
   try {
+    const { gameId } = await params
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
@@ -40,7 +41,7 @@ export async function PUT(
 
     // Get the current game to check if theme is changing
     const currentGame = await prisma.game.findUnique({
-      where: { id: params.gameId }
+      where: { id: gameId }
     })
 
     if (!currentGame) {
@@ -59,7 +60,7 @@ export async function PUT(
             in: ['UPCOMING', 'ACTIVE']
           },
           id: {
-            not: params.gameId // Exclude current game
+            not: gameId // Exclude current game
           }
         }
       })
@@ -90,7 +91,7 @@ export async function PUT(
     }
 
     const game = await prisma.game.update({
-      where: { id: params.gameId },
+      where: { id: gameId },
       data: updateData,
       include: {
         creator: {
@@ -154,7 +155,7 @@ export async function PUT(
 // PATCH update existing game (SuperAdmin only) - alias for PUT
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { gameId: string } }
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
   return PUT(request, { params })
 }
@@ -162,9 +163,10 @@ export async function PATCH(
 // DELETE game (SuperAdmin only)
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { gameId: string } }
+  { params }: { params: Promise<{ gameId: string }> }
 ) {
   try {
+    const { gameId } = await params
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
@@ -219,7 +221,7 @@ export async function DELETE(
 
     // Delete the game from the database
     const gameToDelete = await prisma.game.findUnique({
-      where: { id: params.gameId },
+      where: { id: gameId },
       select: {
         id: true,
         title: true,
@@ -235,7 +237,7 @@ export async function DELETE(
     }
 
     await prisma.game.delete({
-      where: { id: params.gameId }
+      where: { id: gameId }
     })
 
     // Log the activity

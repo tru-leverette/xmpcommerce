@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
 
 interface Game {
   id: string
@@ -16,13 +18,22 @@ interface Game {
   _count: {
     participants: number
   }
+  isRegistered?: boolean // Track if current user is registered
 }
 
-export default function Games() {
+function Games() {
   const [games, setGames] = useState<Game[]>([])
   const [loading, setLoading] = useState(true)
   const [registering, setRegistering] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isNavigating, setIsNavigating] = useState(false)
+  const router = useRouter()
+
+  // Handle navigation with loading state
+  const handleNavigation = (url: string) => {
+    setIsNavigating(true)
+    router.push(url)
+  }
 
   useEffect(() => {
     // Check authentication status
@@ -32,9 +43,28 @@ export default function Games() {
     fetchGames()
   }, [])
 
+  useEffect(() => {
+    // Reset navigation loading state after a short delay
+    // This handles cases where the router.push completes quickly
+    if (isNavigating) {
+      const timer = setTimeout(() => {
+        setIsNavigating(false)
+      }, 1000) // Reset after 1 second max
+      
+      return () => clearTimeout(timer)
+    }
+  }, [isNavigating])
+
   const fetchGames = async () => {
     try {
-      const response = await fetch('/api/games')
+      const token = localStorage.getItem('token')
+      const headers: HeadersInit = {}
+      
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+      
+      const response = await fetch('/api/games', { headers })
       const data = await response.json()
       setGames(data.games || [])
     } catch (error) {
@@ -60,7 +90,14 @@ export default function Games() {
       
       if (response.ok) {
         alert('Successfully registered for the game!')
-        fetchGames() // Refresh the games list
+        // Update the local state to show registration status
+        setGames(prevGames => 
+          prevGames.map(game => 
+            game.id === gameId 
+              ? { ...game, isRegistered: true, _count: { ...game._count, participants: game._count.participants + 1 } }
+              : game
+          )
+        )
       } else {
         alert(data.error || 'Registration failed')
       }
@@ -87,12 +124,12 @@ export default function Games() {
     
     if (!token) {
       return (
-        <Link 
-          href="/auth/login"
+        <button
+          onClick={() => handleNavigation("/auth/login")}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
         >
           Login to Join
-        </Link>
+        </button>
       )
     }
 
@@ -102,6 +139,16 @@ export default function Games() {
           <span className="text-gray-500 text-sm">Coming Soon</span>
         )
       case 'UPCOMING':
+        if (game.isRegistered) {
+          return (
+            <button
+              disabled
+              className="bg-gray-400 text-white px-4 py-2 rounded-lg text-sm font-medium cursor-not-allowed opacity-50"
+            >
+              Registered
+            </button>
+          )
+        }
         return (
           <button
             onClick={() => registerForGame(game.id)}
@@ -113,12 +160,12 @@ export default function Games() {
         )
       case 'ACTIVE':
         return (
-          <Link 
-            href={`/games/${game.id}/play`}
+          <button
+            onClick={() => handleNavigation(`/games/${game.id}/play`)}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
           >
             Play Now
-          </Link>
+          </button>
         )
       case 'COMPLETED':
         return (
@@ -140,6 +187,18 @@ export default function Games() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Navigation Loading Overlay */}
+      {isNavigating && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 shadow-xl">
+            <div className="flex items-center space-x-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <span className="text-gray-700 font-medium">Loading...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white shadow">
         <div className="container mx-auto px-4 py-6">
@@ -148,6 +207,7 @@ export default function Games() {
             <Link 
               href={isAuthenticated ? "/dashboard" : "/"}
               className="text-blue-600 hover:text-blue-500 font-medium"
+              onClick={() => handleNavigation(isAuthenticated ? "/dashboard" : "/")}
             >
               ← {isAuthenticated ? "Back to Dashboard" : "Back to Home"}
             </Link>
@@ -165,7 +225,7 @@ export default function Games() {
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {games.map((game) => (
-              <div key={game.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
+              <div key={game.id} id={`game-${game.id}`} className="relative bg-white rounded-xl shadow-lg overflow-hidden">
                 <div className="p-6">
                   <div className="flex justify-between items-start mb-4">
                     <h3 className="text-xl font-semibold text-gray-900">{game.title}</h3>
@@ -203,6 +263,35 @@ export default function Games() {
                     {getActionButton(game)}
                   </div>
                 </div>
+                
+                {/* Gray overlay for registered games - covers entire card */}
+                {game.isRegistered && game.status === 'UPCOMING' && (
+                  <div
+                    id="registered-overlay" 
+                    className="absolute inset-0 rounded-xl flex items-center justify-center transition-all duration-200 group"
+                    style={{ 
+                      backgroundColor: 'rgba(107, 114, 128, 0.5)' 
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(107, 114, 128, 0.6)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'rgba(107, 114, 128, 0.5)'
+                    }}
+                  >
+                    <button
+                      onClick={() => handleNavigation(`/games/${game.id}/play`)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg transform transition-all group-hover:scale-105"
+                    >
+                      Continue
+                    </button>
+                    {/* Tooltip */}
+                    <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm px-3 py-2 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10 shadow-lg">
+                      ✓ Already Registered - Click to Continue
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-gray-800"></div>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -211,3 +300,14 @@ export default function Games() {
     </div>
   )
 }
+
+// Wrap the component with ProtectedRouteGuard
+function ProtectedGames() {
+  return (
+    <ProtectedRouteGuard>
+      <Games />
+    </ProtectedRouteGuard>
+  )
+}
+
+export default ProtectedGames

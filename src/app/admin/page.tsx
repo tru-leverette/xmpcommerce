@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
+import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
 
 interface User {
   id: string
@@ -87,18 +88,53 @@ export default function AdminDashboard() {
   const [activityTotalCount, setActivityTotalCount] = useState(0)
   const [loadingActivities, setLoadingActivities] = useState(false)
 
+  const verifyAdminAccess = async () => {
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) {
+        console.warn('No token found - redirecting to login')
+        window.location.href = '/auth/login?redirect=/admin'
+        return
+      }
+
+      // Test token validity with server-side verification
+      const response = await fetch('/api/admin/users', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (!response.ok) {
+        console.warn('Token invalid or insufficient permissions - redirecting to login')
+        localStorage.clear() // Clear invalid token
+        window.location.href = '/auth/login?redirect=/admin&reason=invalid_token'
+        return
+      }
+
+      // If we get here, token is valid and user has admin access
+      await fetchCurrentUser()
+      await fetchUsers()
+      await fetchGames()
+      await fetchActivities()
+    } catch (error) {
+      console.error('Admin access verification failed:', error)
+      localStorage.clear()
+      window.location.href = '/auth/login?redirect=/admin&reason=verification_failed'
+    }
+  }
+
   useEffect(() => {
-    fetchCurrentUser()
-    fetchUsers()
-    fetchGames()
-    fetchActivities()
+    // Verify server-side authentication before loading admin data
+    verifyAdminAccess()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchCurrentUser = async () => {
     try {
       const token = localStorage.getItem('token')
       if (token) {
-        // Decode the JWT token to get user role (simple approach)
+        // Server-side verification happens in verifyAdminAccess
+        // This is just for UI display purposes
         const payload = JSON.parse(atob(token.split('.')[1]))
         setCurrentUserRole(payload.role || 'USER')
       }
@@ -594,7 +630,8 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <ProtectedRouteGuard requiredRole={['ADMIN', 'SUPERADMIN']}>
+      <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Page Title */}
         <div className="mb-8">
@@ -1424,5 +1461,6 @@ export default function AdminDashboard() {
         </div>
       )}
     </div>
+    </ProtectedRouteGuard>
   )
 }

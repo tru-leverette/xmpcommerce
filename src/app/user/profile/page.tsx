@@ -84,10 +84,6 @@ export default function ProfilePage() {
   const validateForm = () => {
     const newErrors: { [key: string]: string } = {}
 
-    if (!formData.username.trim()) {
-      newErrors.username = 'Username is required'
-    }
-
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required'
     } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
@@ -117,12 +113,10 @@ export default function ProfilePage() {
     try {
       const token = localStorage.getItem('token')
       const updateData: {
-        username: string;
         email: string;
         currentPassword?: string;
         newPassword?: string;
       } = {
-        username: formData.username,
         email: formData.email
       }
 
@@ -391,8 +385,12 @@ export default function ProfilePage() {
                       name="username"
                       value={formData.username}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      disabled={true}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed focus:outline-none"
                     />
+                    <p className="text-gray-500 text-sm mt-1">
+                      Username cannot be changed as it must remain unique across all users.
+                    </p>
                     {errors.username && (
                       <p className="text-red-500 text-sm mt-1">{errors.username}</p>
                     )}

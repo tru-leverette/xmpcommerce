@@ -76,12 +76,12 @@ export async function PUT(request: NextRequest) {
 
     const decoded = verifyToken(token)
     const body = await request.json()
-    const { username, email, currentPassword, newPassword } = body
+    const { email, currentPassword, newPassword } = body
 
     // Validate required fields
-    if (!username || !email) {
+    if (!email) {
       return NextResponse.json(
-        { error: 'Username and email are required' },
+        { error: 'Email is required' },
         { status: 400 }
       )
     }
@@ -95,21 +95,6 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
-      )
-    }
-
-    // Check if username is already taken by another user
-    const existingUser = await prisma.user.findFirst({
-      where: {
-        username,
-        id: { not: decoded.userId }
-      }
-    })
-
-    if (existingUser) {
-      return NextResponse.json(
-        { error: 'Username already taken' },
-        { status: 400 }
       )
     }
 
@@ -130,11 +115,9 @@ export async function PUT(request: NextRequest) {
 
     // Prepare update data
     const updateData: {
-      username: string;
       email: string;
       password?: string;
     } = {
-      username,
       email
     }
 

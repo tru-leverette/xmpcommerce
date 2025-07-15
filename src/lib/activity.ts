@@ -11,7 +11,7 @@ export type ActivityType =
   | 'USER_UNBANNED'
 
 export interface ActivityDetails {
-  [key: string]: any
+  [key: string]: string | number | boolean | null | Date | object
 }
 
 export async function logActivity(

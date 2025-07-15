@@ -4,8 +4,24 @@ import { verifyToken, getTokenFromHeader } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 
 // GET all games (public - for viewing available games)
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Check if user is authenticated (optional for this endpoint)
+    const authHeader = request.headers.get('authorization')
+    let currentUserId = null
+    
+    if (authHeader) {
+      try {
+        const token = getTokenFromHeader(authHeader)
+        if (token) {
+          const decoded = verifyToken(token)
+          currentUserId = decoded.userId
+        }
+      } catch {
+        // Ignore auth errors for public endpoint
+      }
+    }
+
     const games = await prisma.game.findMany({
       include: {
         creator: {
@@ -17,14 +33,29 @@ export async function GET() {
           select: {
             participants: true
           }
-        }
+        },
+        participants: currentUserId ? {
+          where: {
+            userId: currentUserId
+          },
+          select: {
+            id: true
+          }
+        } : false
       },
       orderBy: {
         createdAt: 'desc'
       }
     })
 
-    return NextResponse.json({ games })
+    // Add isRegistered flag for authenticated users
+    const gamesWithRegistration = games.map(game => ({
+      ...game,
+      isRegistered: currentUserId ? game.participants.length > 0 : false,
+      participants: undefined // Remove participants array from response
+    }))
+
+    return NextResponse.json({ games: gamesWithRegistration })
 
   } catch (error) {
     console.error('Error fetching games:', error)
