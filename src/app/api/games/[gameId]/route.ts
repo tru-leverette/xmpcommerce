@@ -106,6 +106,37 @@ export async function PUT(
       }
     })
 
+    // Log the activity
+    try {
+      const changes = []
+      if (currentGame.title !== title) changes.push(`title: "${currentGame.title}" → "${title}"`)
+      if (currentGame.theme !== theme) changes.push(`continent: "${currentGame.theme}" → "${theme}"`)
+      if (status && currentGame.status !== status) changes.push(`status: "${currentGame.status}" → "${status}"`)
+      if (currentGame.launchDate !== updateData.launchDate) {
+        const oldDate = currentGame.launchDate ? new Date(currentGame.launchDate).toLocaleDateString() : 'None'
+        const newDate = updateData.launchDate ? new Date(updateData.launchDate).toLocaleDateString() : 'None'
+        changes.push(`launch date: ${oldDate} → ${newDate}`)
+      }
+
+      if (changes.length > 0) {
+        await prisma.activity.create({
+          data: {
+            type: 'GAME_UPDATED',
+            description: `Updated game "${title}": ${changes.join(', ')}`,
+            userId: decoded.userId,
+            details: {
+              gameId: game.id,
+              gameTitle: title,
+              changes: changes
+            }
+          }
+        })
+      }
+    } catch (activityError) {
+      console.error('Failed to log game update activity:', activityError)
+      // Don't fail the main operation if activity logging fails
+    }
+
     return NextResponse.json({
       message: 'Game updated successfully',
       game
@@ -187,9 +218,44 @@ export async function DELETE(
     }
 
     // Delete the game from the database
+    const gameToDelete = await prisma.game.findUnique({
+      where: { id: params.gameId },
+      select: {
+        id: true,
+        title: true,
+        theme: true
+      }
+    })
+
+    if (!gameToDelete) {
+      return NextResponse.json(
+        { error: 'Game not found' },
+        { status: 404 }
+      )
+    }
+
     await prisma.game.delete({
       where: { id: params.gameId }
     })
+
+    // Log the activity
+    try {
+      await prisma.activity.create({
+        data: {
+          type: 'GAME_DELETED',
+          description: `Deleted game "${gameToDelete.title}" from ${gameToDelete.theme}`,
+          userId: decoded.userId,
+          details: {
+            gameId: gameToDelete.id,
+            gameTitle: gameToDelete.title,
+            continent: gameToDelete.theme
+          }
+        }
+      })
+    } catch (activityError) {
+      console.error('Failed to log game deletion activity:', activityError)
+      // Don't fail the main operation if activity logging fails
+    }
 
     return NextResponse.json({
       message: 'Game deleted successfully'

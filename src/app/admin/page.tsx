@@ -29,12 +29,23 @@ interface Game {
   }
 }
 
+interface Activity {
+  id: string
+  type: 'GAME_CREATED' | 'GAME_UPDATED' | 'GAME_DELETED' | 'USER_UPDATED' | 'USER_LOGIN'
+  description: string
+  timestamp: string
+  userId: string
+  username: string
+  details?: Record<string, unknown>
+}
+
 export default function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([])
   const [games, setGames] = useState<Game[]>([])
+  const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'users' | 'games'>('users')
+  const [activeTab, setActiveTab] = useState<'users' | 'games' | 'activity'>('users')
   const [showCreateGame, setShowCreateGame] = useState(false)
   const [creatingGame, setCreatingGame] = useState(false)
   const [currentUserRole, setCurrentUserRole] = useState<string>('')
@@ -70,10 +81,17 @@ export default function AdminDashboard() {
   // Track occupied continents
   const [occupiedContinents, setOccupiedContinents] = useState<Set<string>>(new Set())
 
+  // Activity pagination state
+  const [activityPage, setActivityPage] = useState(1)
+  const [activityTotalPages, setActivityTotalPages] = useState(1)
+  const [activityTotalCount, setActivityTotalCount] = useState(0)
+  const [loadingActivities, setLoadingActivities] = useState(false)
+
   useEffect(() => {
     fetchCurrentUser()
     fetchUsers()
     fetchGames()
+    fetchActivities()
   }, [])
 
   const fetchCurrentUser = async () => {
@@ -134,6 +152,58 @@ export default function AdminDashboard() {
       console.error('Error fetching games:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchActivities = async (page: number = 1) => {
+    try {
+      setLoadingActivities(true)
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/activities?page=${page}&limit=20`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Transform the data to match our interface
+        const transformedActivities = data.activities.map((activity: {
+          id: string
+          type: string
+          description: string
+          createdAt: string
+          userId: string
+          user: { username: string }
+          details: Record<string, unknown>
+        }) => ({
+          id: activity.id,
+          type: activity.type as Activity['type'],
+          description: activity.description,
+          timestamp: activity.createdAt,
+          userId: activity.userId,
+          username: activity.user.username,
+          details: activity.details
+        }))
+        setActivities(transformedActivities)
+        
+        // Update pagination state
+        if (data.pagination) {
+          setActivityPage(data.pagination.currentPage)
+          setActivityTotalPages(data.pagination.totalPages)
+          setActivityTotalCount(data.pagination.totalCount)
+        }
+      } else {
+        console.error('Failed to fetch activities')
+        // Fallback to empty array if API fails
+        setActivities([])
+      }
+    } catch (error) {
+      console.error('Error fetching activities:', error)
+      // Fallback to empty array if fetch fails
+      setActivities([])
+    } finally {
+      setLoadingActivities(false)
     }
   }
 
@@ -482,6 +552,36 @@ export default function AdminDashboard() {
     }
   }
 
+  // Handle tab switching and reset states
+  const handleTabSwitch = (tab: 'users' | 'games' | 'activity') => {
+    setActiveTab(tab)
+    
+    // Reset game management states when switching away from games tab
+    if (tab !== 'games') {
+      setShowCreateGame(false)
+      setEditingGame(null)
+      setShowCreateConfirmation(false)
+      setShowDeleteConfirmation(false)
+      setGameToDelete(null)
+      setCreatePassword('')
+      setDeletePassword('')
+      setCreatePasswordError('')
+      setDeletePasswordError('')
+    }
+    
+    // Fetch activities when switching to activity tab
+    if (tab === 'activity') {
+      fetchActivities(1) // Reset to first page when switching to activity tab
+    }
+  }
+
+  // Handle activity page change
+  const handleActivityPageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= activityTotalPages) {
+      fetchActivities(newPage)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -561,7 +661,7 @@ export default function AdminDashboard() {
           <div className="border-b border-gray-200">
             <nav className="-mb-px flex space-x-8">
               <button
-                onClick={() => setActiveTab('users')}
+                onClick={() => handleTabSwitch('users')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'users'
                     ? 'border-blue-500 text-blue-600'
@@ -571,7 +671,7 @@ export default function AdminDashboard() {
                 User Management
               </button>
               <button
-                onClick={() => setActiveTab('games')}
+                onClick={() => handleTabSwitch('games')}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === 'games'
                     ? 'border-blue-500 text-blue-600'
@@ -579,6 +679,16 @@ export default function AdminDashboard() {
                 }`}
               >
                 Game Management
+              </button>
+              <button
+                onClick={() => handleTabSwitch('activity')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'activity'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                Activity Log
               </button>
             </nav>
           </div>
@@ -611,7 +721,7 @@ export default function AdminDashboard() {
                 </p>
               </div>
             </>
-          ) : (
+          ) : activeTab === 'games' ? (
             <>
               <div className="bg-white rounded-lg shadow p-6">
                 <h3 className="text-sm font-medium text-gray-500">Total Games</h3>
@@ -630,9 +740,34 @@ export default function AdminDashboard() {
                 </p>
               </div>
               <div className="bg-white rounded-lg shadow p-6">
-                <h3 className="text-sm font-medium text-gray-500">Pending Games</h3>
-                <p className="text-2xl font-bold text-yellow-600">
-                  {games.filter((g: Game) => g.status === 'PENDING').length}
+                <h3 className="text-sm font-medium text-gray-500">Completed Games</h3>
+                <p className="text-2xl font-bold text-gray-600">
+                  {games.filter((g: Game) => g.status === 'COMPLETED').length}
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-sm font-medium text-gray-500">Total Activities</h3>
+                <p className="text-2xl font-bold text-gray-900">{activities.length}</p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-sm font-medium text-gray-500">Games Created</h3>
+                <p className="text-2xl font-bold text-green-600">
+                  {activities.filter((a: Activity) => a.type === 'GAME_CREATED').length}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-sm font-medium text-gray-500">User Updates</h3>
+                <p className="text-2xl font-bold text-blue-600">
+                  {activities.filter((a: Activity) => a.type === 'USER_UPDATED').length}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-sm font-medium text-gray-500">Recent Logins</h3>
+                <p className="text-2xl font-bold text-purple-600">
+                  {activities.filter((a: Activity) => a.type === 'USER_LOGIN').length}
                 </p>
               </div>
             </>
@@ -729,7 +864,7 @@ export default function AdminDashboard() {
               </table>
             </div>
           </div>
-        ) : (
+        ) : activeTab === 'games' ? (
           <div className="space-y-6">
             {/* Create Game Button */}
             <div className="flex justify-between items-center">
@@ -1037,11 +1172,160 @@ export default function AdminDashboard() {
               </div>
             </div>
           </div>
+        ) : null}
+        
+        {activeTab === 'activity' && (
+          <div className="bg-white shadow rounded-lg relative">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Activity Log</h2>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Activity
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      User
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Details
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Time
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {activities.map((activity: Activity) => (
+                    <tr key={activity.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center">
+                          <div className={`w-2 h-2 rounded-full mr-3 ${
+                            activity.type === 'GAME_CREATED' ? 'bg-green-500' :
+                            activity.type === 'USER_UPDATED' ? 'bg-blue-500' :
+                            activity.type === 'USER_LOGIN' ? 'bg-purple-500' :
+                            'bg-gray-500'
+                          }`}></div>
+                          <span className="text-sm font-medium text-gray-900">
+                            {activity.type.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {activity.username}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {activity.description}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(activity.timestamp).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* Activity Pagination */}
+            {activityTotalPages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                <div className="flex-1 flex justify-between sm:hidden">
+                  <button
+                    onClick={() => handleActivityPageChange(activityPage - 1)}
+                    disabled={activityPage === 1 || loadingActivities}
+                    className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => handleActivityPageChange(activityPage + 1)}
+                    disabled={activityPage === activityTotalPages || loadingActivities}
+                    className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-gray-700">
+                      Showing{' '}
+                      <span className="font-medium">
+                        {(activityPage - 1) * 20 + 1}
+                      </span>{' '}
+                      to{' '}
+                      <span className="font-medium">
+                        {Math.min(activityPage * 20, activityTotalCount)}
+                      </span>{' '}
+                      of{' '}
+                      <span className="font-medium">{activityTotalCount}</span> activities
+                    </p>
+                  </div>
+                  <div>
+                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                      <button
+                        onClick={() => handleActivityPageChange(activityPage - 1)}
+                        disabled={activityPage === 1 || loadingActivities}
+                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      
+                      {/* Page numbers */}
+                      {Array.from({ length: Math.min(5, activityTotalPages) }, (_, i) => {
+                        let pageNum
+                        if (activityTotalPages <= 5) {
+                          pageNum = i + 1
+                        } else if (activityPage <= 3) {
+                          pageNum = i + 1
+                        } else if (activityPage >= activityTotalPages - 2) {
+                          pageNum = activityTotalPages - 4 + i
+                        } else {
+                          pageNum = activityPage - 2 + i
+                        }
+                        
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => handleActivityPageChange(pageNum)}
+                            disabled={loadingActivities}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                              pageNum === activityPage
+                                ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
+                                : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          >
+                            {pageNum}
+                          </button>
+                        )
+                      })}
+                      
+                      <button
+                        onClick={() => handleActivityPageChange(activityPage + 1)}
+                        disabled={activityPage === activityTotalPages || loadingActivities}
+                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </nav>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Loading overlay for activity table */}
+            {loadingActivities && (
+              <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Password Confirmation Modal for Game Creation */}
-      {showCreateConfirmation && (
+      {/* Password Confirmation Modal for Game Creation - Only show on games tab */}
+      {showCreateConfirmation && activeTab === 'games' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -1090,8 +1374,8 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Password Confirmation Modal for Game Deletion */}
-      {showDeleteConfirmation && (
+      {/* Password Confirmation Modal for Game Deletion - Only show on games tab */}
+      {showDeleteConfirmation && activeTab === 'games' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">

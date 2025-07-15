@@ -17,33 +17,58 @@ export default function Navigation() {
 
   useEffect(() => {
     setMounted(true)
-    // Check if user is authenticated
-    const token = localStorage.getItem('token')
-    if (token) {
-      setIsAuthenticated(true)
-      
-      // Try to decode JWT token to get user info
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]))
-        setUserRole(payload.role || 'USER')
-        setUserName(payload.username || payload.email || 'User')
-        console.log('User role from token:', payload.role)
-      } catch {
-        // If token parsing fails, check for stored user data
-        const storedUser = localStorage.getItem('user')
-        if (storedUser) {
-          const userData = JSON.parse(storedUser)
-          setUserRole(userData.role || 'USER')
-          setUserName(userData.username || userData.email || 'User')
-          console.log('User role from storage:', userData.role)
-        } else {
-          // Fallback - you might want to set SUPERADMIN for testing
-          setUserRole('SUPERADMIN') // Change this back to 'USER' for production
-          setUserName('Admin User')
-          console.log('User role fallback: SUPERADMIN')
+    
+    const checkAuth = () => {
+      // Check if user is authenticated
+      const token = localStorage.getItem('token')
+      if (token) {
+        setIsAuthenticated(true)
+        
+        // Try to decode JWT token to get user info
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]))
+          setUserRole(payload.role || 'USER')
+          setUserName(payload.username || payload.email || 'User')
+          console.log('User role from token:', payload.role)
+        } catch {
+          // If token parsing fails, check for stored user data
+          const storedUser = localStorage.getItem('user')
+          if (storedUser) {
+            const userData = JSON.parse(storedUser)
+            setUserRole(userData.role || 'USER')
+            setUserName(userData.username || userData.email || 'User')
+            console.log('User role from storage:', userData.role)
+          } else {
+            // Fallback - you might want to set SUPERADMIN for testing
+            setUserRole('SUPERADMIN') // Change this back to 'USER' for production
+            setUserName('Admin User')
+            console.log('User role fallback: SUPERADMIN')
+          }
         }
+      } else {
+        setIsAuthenticated(false)
+        setUserRole(null)
+        setUserName('')
       }
     }
+
+    // Initial check
+    checkAuth()
+
+    // Listen for storage changes (when login/logout happens in the same tab)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'token') {
+        checkAuth()
+      }
+    }
+
+    // Listen for custom events (for same-tab login/logout)
+    const handleAuthChange = () => {
+      checkAuth()
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('authChange', handleAuthChange)
 
     // Close dropdown when clicking outside
     const handleClickOutside = (event: MouseEvent) => {
@@ -53,17 +78,73 @@ export default function Navigation() {
     }
 
     document.addEventListener('mousedown', handleClickOutside)
+    
     return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('authChange', handleAuthChange)
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [])
 
-  const handleLogout = () => {
+  // Check auth state when pathname changes (route navigation)
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem('token')
+      if (token) {
+        setIsAuthenticated(true)
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]))
+          setUserRole(payload.role || 'USER')
+          setUserName(payload.username || payload.email || 'User')
+        } catch {
+          const storedUser = localStorage.getItem('user')
+          if (storedUser) {
+            const userData = JSON.parse(storedUser)
+            setUserRole(userData.role || 'USER')
+            setUserName(userData.username || userData.email || 'User')
+          } else {
+            setUserRole('SUPERADMIN')
+            setUserName('Admin User')
+          }
+        }
+      } else {
+        setIsAuthenticated(false)
+        setUserRole(null)
+        setUserName('')
+      }
+    }
+
+    checkAuth()
+  }, [pathname]) // Re-run when route changes
+
+  const handleLogout = async () => {
+    const token = localStorage.getItem('token')
+    
+    // Call logout API to record activity before clearing token
+    if (token) {
+      try {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        })
+      } catch (error) {
+        console.error('Failed to log logout activity:', error)
+        // Continue with logout even if API call fails
+      }
+    }
+    
     localStorage.removeItem('token')
     setIsAuthenticated(false)
     setUserRole(null)
     setUserName('')
     setShowDropdown(false)
+    
+    // Dispatch custom event to notify other components
+    window.dispatchEvent(new Event('authChange'))
+    
     router.push('/')
   }
 

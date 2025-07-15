@@ -137,6 +137,26 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // Log the activity
+    try {
+      await prisma.activity.create({
+        data: {
+          type: 'GAME_CREATED',
+          description: `Created game "${title}" for ${theme}`,
+          userId: decoded.userId,
+          details: {
+            gameId: game.id,
+            gameTitle: title,
+            continent: theme,
+            launchDate: launchDate || null
+          }
+        }
+      })
+    } catch (activityError) {
+      console.error('Failed to log activity:', activityError)
+      // Don't fail the main operation if activity logging fails
+    }
+
     return NextResponse.json({
       message: 'Game created successfully',
       game

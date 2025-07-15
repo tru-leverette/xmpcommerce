@@ -52,6 +52,25 @@ export async function POST(request: NextRequest) {
       role: user.role
     })
 
+    // Log the login activity
+    try {
+      await prisma.activity.create({
+        data: {
+          type: 'USER_LOGIN',
+          description: `User ${user.username} logged in`,
+          userId: user.id,
+          details: {
+            email: user.email,
+            role: user.role,
+            loginTime: new Date().toISOString()
+          }
+        }
+      })
+    } catch (activityError) {
+      console.error('Failed to log login activity:', activityError)
+      // Don't fail the login if activity logging fails
+    }
+
     return NextResponse.json({
       message: 'Login successful',
       token,

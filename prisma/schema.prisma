@@ -18,6 +18,7 @@ model User {
   updatedAt    DateTime      @updatedAt
   createdGames Game[]
   participants Participant[]
+  activities   Activity[]
 
   @@map("users")
 }
@@ -204,6 +205,20 @@ model ClueSubmission {
   @@map("clue_submissions")
 }
 
+model Activity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  description String
+  details     Json?
+  createdAt   DateTime     @default(now())
+  userId      String
+  user        User         @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "activities_userId_fkey")
+  @@index([createdAt])
+  @@map("activities")
+}
+
 enum UserRole {
   USER
   ADMIN
@@ -231,4 +246,15 @@ enum ClueType {
   TEXT_ANSWER
   PHOTO_UPLOAD
   COMBINED
+}
+
+enum ActivityType {
+  GAME_CREATED
+  GAME_UPDATED
+  GAME_DELETED
+  USER_UPDATED
+  USER_LOGIN
+  USER_LOGOUT
+  USER_BANNED
+  USER_UNBANNED
 }
