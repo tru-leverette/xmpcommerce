@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { verifyToken, getTokenFromHeader } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
+
+// Dynamic route configuration to prevent static generation
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 // GET all games (public - for viewing available games)
 export async function GET(request: NextRequest) {
   try {
+    // Lazy load dependencies
+    const { prisma } = await import('@/lib/prisma')
+    const { getTokenFromHeader, verifyToken } = await import('@/lib/auth')
+    
     // Check if user is authenticated (optional for this endpoint)
     const authHeader = request.headers.get('authorization')
     let currentUserId = null
@@ -69,6 +75,10 @@ export async function GET(request: NextRequest) {
 // POST create new game (SuperAdmin only)
 export async function POST(request: NextRequest) {
   try {
+    // Lazy load dependencies
+    const { prisma } = await import('@/lib/prisma')
+    const { verifyToken, getTokenFromHeader } = await import('@/lib/auth')
+    
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
