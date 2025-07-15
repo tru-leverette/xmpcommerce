@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { verifyToken, getTokenFromHeader } from '@/lib/auth'
+
+// Dynamic route configuration to prevent static generation
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+// Lazy load dependencies to avoid build-time issues
+const loadDependencies = async () => {
+  const { prisma } = await import('@/lib/prisma')
+  const { verifyToken, getTokenFromHeader } = await import('@/lib/auth')
+  return { prisma, verifyToken, getTokenFromHeader }
+}
 
 // PATCH - Ban/Unban user or change role (Admin/SuperAdmin only)
 export async function PATCH(
@@ -8,6 +17,7 @@ export async function PATCH(
   { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
+    const { prisma, verifyToken, getTokenFromHeader } = await loadDependencies()
     const { userId } = await params
     // Authentication check
     const authHeader = request.headers.get('authorization')

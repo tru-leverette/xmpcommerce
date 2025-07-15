@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { verifyTokenAndUser, getTokenFromHeader } from '@/lib/auth'
+
+// Dynamic route configuration to prevent static generation
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
+
+// Lazy load dependencies to avoid build-time issues
+const loadDependencies = async () => {
+  const { prisma } = await import('@/lib/prisma')
+  const { verifyTokenAndUser, getTokenFromHeader } = await import('@/lib/auth')
+  return { prisma, verifyTokenAndUser, getTokenFromHeader }
+}
 
 // GET all users (Admin/SuperAdmin only)
 export async function GET(request: NextRequest) {
   try {
+    const { prisma, verifyTokenAndUser, getTokenFromHeader } = await loadDependencies()
+    
     // Authentication is required
     const authHeader = request.headers.get('authorization')
     
