@@ -42,3 +42,6 @@ next-env.d.ts
 
 # security audit (contains sensitive vulnerability information)
 SECURITY_AUDIT.md
+
+# scripts folder
+scripts/

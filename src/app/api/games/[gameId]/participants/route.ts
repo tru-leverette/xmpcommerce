@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { verifyTokenAndUser, getTokenFromHeader } from '@/lib/auth'
+
+// Dynamic route configuration to prevent static generation
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 // POST - Register for a game
 export async function POST(
@@ -8,6 +10,9 @@ export async function POST(
   { params }: { params: Promise<{ gameId: string }> }
 ) {
   try {
+    // Lazy load dependencies
+    const { prisma } = await import('@/lib/prisma')
+    const { verifyTokenAndUser, getTokenFromHeader } = await import('@/lib/auth')
     const { gameId } = await params
     const authHeader = request.headers.get('authorization')
     
@@ -137,6 +142,10 @@ export async function GET(
   { params }: { params: Promise<{ gameId: string }> }
 ) {
   try {
+    // Lazy load dependencies
+    const { prisma } = await import('@/lib/prisma')
+    const { verifyTokenAndUser, getTokenFromHeader } = await import('@/lib/auth')
+    
     const { gameId } = await params
     const authHeader = request.headers.get('authorization')
     

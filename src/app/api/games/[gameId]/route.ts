@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { verifyToken, getTokenFromHeader } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
+
+// Dynamic route configuration to prevent static generation
+export const dynamic = 'force-dynamic'
+export const runtime = 'nodejs'
 
 // PUT update existing game (SuperAdmin only)
 export async function PUT(
@@ -9,6 +11,10 @@ export async function PUT(
   { params }: { params: Promise<{ gameId: string }> }
 ) {
   try {
+    // Lazy load dependencies
+    const { prisma } = await import('@/lib/prisma')
+    const { verifyToken, getTokenFromHeader } = await import('@/lib/auth')
+    
     const { gameId } = await params
     // Authentication check
     const authHeader = request.headers.get('authorization')
@@ -166,6 +172,10 @@ export async function DELETE(
   { params }: { params: Promise<{ gameId: string }> }
 ) {
   try {
+    // Lazy load dependencies
+    const { prisma } = await import('@/lib/prisma')
+    const { verifyToken, getTokenFromHeader } = await import('@/lib/auth')
+    
     const { gameId } = await params
     // Authentication check
     const authHeader = request.headers.get('authorization')
