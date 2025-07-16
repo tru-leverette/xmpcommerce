@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useParams } from 'next/navigation'
-import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
 import PirateMapLoader from '@/components/PirateMapLoader'
+import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
+import { useParams } from 'next/navigation'
+import { useCallback, useEffect, useState } from 'react'
 
 interface Clue {
   id: string
@@ -24,31 +24,84 @@ interface Submission {
 function PlayGame() {
   const params = useParams()
   const gameId = params.gameId as string
-  
+
   const [showPirateMap, setShowPirateMap] = useState(true)
   const [currentClue, setCurrentClue] = useState<Clue | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [textAnswer, setTextAnswer] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [location, setLocation] = useState<{lat: number, lng: number} | null>(null)
+  const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null)
   const [lastSubmission, setLastSubmission] = useState<Submission | null>(null)
+  const [currentClueNumber, setCurrentClueNumber] = useState(1)
+  const [totalClues, setTotalClues] = useState(10)
+  const [gameComplete, setGameComplete] = useState(false)
 
-  const fetchCurrentClue = useCallback(async () => {
+  // Fetch user's progress from database
+  const fetchProgress = useCallback(async () => {
     try {
-      console.log('Fetching clue for game:', gameId)
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/games/${gameId}/clues`, {
+      const response = await fetch(`/api/games/${gameId}/progress`, {
         headers: {
           'Authorization': `Bearer ${token || ''}`
         }
       })
-      
+
+      const data = await response.json()
+      if (response.ok) {
+        const progress = data.progress
+        setCurrentClueNumber(progress.currentClueNumber)
+        setTotalClues(progress.totalClues)
+        setGameComplete(progress.isGameComplete)
+        return progress.currentClueNumber
+      } else {
+        console.error('Progress API error:', data.error)
+        return 1 // Default to first clue
+      }
+    } catch (error) {
+      console.error('Error fetching progress:', error)
+      return 1 // Default to first clue
+    }
+  }, [gameId])
+
+  // Update progress in database when clue is completed
+  const updateProgress = useCallback(async (clueNumber: number, isCorrect: boolean, submissionData?: object) => {
+    try {
+      const token = localStorage.getItem('token')
+      await fetch(`/api/games/${gameId}/progress`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token || ''}`
+        },
+        body: JSON.stringify({
+          clueNumber,
+          isCorrect,
+          submissionData
+        })
+      })
+    } catch (error) {
+      console.error('Error updating progress:', error)
+    }
+  }, [gameId])
+
+  const fetchCurrentClue = useCallback(async (clueNumber = currentClueNumber) => {
+    try {
+      console.log('Fetching clue for game:', gameId, 'clueNumber:', clueNumber)
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/games/${gameId}/clues?clueNumber=${clueNumber}`, {
+        headers: {
+          'Authorization': `Bearer ${token || ''}`
+        }
+      })
+
       const data = await response.json()
       console.log('Clue API response:', data)
-      
+
       if (response.ok) {
         setCurrentClue(data.clue)
+        setTotalClues(data.totalClues || 10)
+        setCurrentClueNumber(data.clue.clueNumber)
         console.log('Clue set successfully:', data.clue)
       } else {
         console.error('Clue API error:', data.error)
@@ -61,7 +114,7 @@ function PlayGame() {
       console.log('Setting loading to false')
       setLoading(false)
     }
-  }, [gameId])
+  }, [gameId, currentClueNumber])
 
   useEffect(() => {
     console.log('UseEffect triggered - showPirateMap:', showPirateMap, 'loading:', loading)
@@ -69,12 +122,15 @@ function PlayGame() {
     if (!showPirateMap) {
       console.log('Pirate map completed, fetching clue data...')
       const fetchData = async () => {
-        await fetchCurrentClue()
+        // First fetch user's progress to get current clue number
+        const progressClueNumber = await fetchProgress()
+        // Then fetch the current clue based on progress
+        await fetchCurrentClue(progressClueNumber)
         requestLocation()
       }
       fetchData()
     }
-  }, [fetchCurrentClue, showPirateMap]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchCurrentClue, fetchProgress, showPirateMap]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fallback: if still loading after pirate map is gone for too long, force completion
   useEffect(() => {
@@ -124,15 +180,15 @@ function PlayGame() {
 
   const submitAnswer = async () => {
     if (!currentClue || !location) return
-    
+
     setSubmitting(true)
-    
+
     try {
       const token = localStorage.getItem('token')
-      
+
       const submissionData: {
         clueId: string
-        location: {lat: number, lng: number}
+        location: { lat: number, lng: number }
         submissionType?: string
         textAnswer?: string
         photoUrl?: string
@@ -157,7 +213,7 @@ function PlayGame() {
           setSubmitting(false)
           return
         }
-        
+
         // In a real app, you would upload the file first
         submissionData.submissionType = 'PHOTO_UPLOAD'
         submissionData.photoUrl = 'mock-photo-url'
@@ -173,17 +229,30 @@ function PlayGame() {
       })
 
       const data = await response.json()
-      
+
       if (response.ok) {
         setLastSubmission(data.submission)
+
+        // Update progress in database
+        await updateProgress(currentClueNumber, data.submission.isCorrect, submissionData)
+
         if (data.submission.isCorrect) {
-          // Move to next clue after a delay
-          setTimeout(() => {
-            fetchCurrentClue()
-            setTextAnswer('')
-            setSelectedFile(null)
-            setLastSubmission(null)
-          }, 3000)
+          if (data.isGameComplete) {
+            setGameComplete(true)
+            // Show completion message
+            setTimeout(() => {
+              alert('🎉 Congratulations! You\'ve completed the scavenger hunt! Well done, treasure hunter!')
+            }, 1000)
+          } else if (data.nextClueNumber) {
+            // Move to next clue after a delay
+            setTimeout(() => {
+              setCurrentClueNumber(data.nextClueNumber)
+              fetchCurrentClue(data.nextClueNumber)
+              setTextAnswer('')
+              setSelectedFile(null)
+              setLastSubmission(null)
+            }, 3000)
+          }
         }
       } else {
         alert(data.error || 'Error submitting answer')
@@ -195,14 +264,57 @@ function PlayGame() {
     }
   }
 
-  if (showPirateMap || loading) {
+  if (showPirateMap) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <PirateMapLoader
+          onComplete={() => {
+            console.log('PirateMapLoader onComplete called')
+            setShowPirateMap(false)
+          }}
+          duration={3000} // 3 seconds for testing - change back to 10000 for production
+        />
+      </div>
+    )
+  }
+
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">
-            {showPirateMap ? "Preparing your adventure..." : "Loading clue..."}
-          </p>
+          <p className="mt-4 text-gray-600">Loading clue...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (gameComplete) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-yellow-50 to-orange-50">
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto text-center">
+            <div className="bg-white rounded-xl shadow-lg p-8">
+              <div className="text-6xl mb-4">🏆</div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-4">
+                Congratulations, Treasure Hunter!
+              </h1>
+              <p className="text-lg text-gray-700 mb-6">
+                You&apos;ve successfully completed the scavenger hunt! You found all {totalClues} clues and proved yourself as a true adventurer.
+              </p>
+              <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-4 mb-6">
+                <p className="text-yellow-800 font-medium">
+                  🏴‍☠️ Total Pebbles Earned: {totalClues * 10}
+                </p>
+              </div>
+              <button
+                onClick={() => window.location.href = '/dashboard'}
+                className="bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700"
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -227,7 +339,12 @@ function PlayGame() {
           <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-900">Scavenger Hunt</h1>
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">Clue #{currentClue.clueNumber}</span>
+              <span className="text-sm text-gray-600">
+                Clue {currentClue.clueNumber} of {totalClues}
+              </span>
+              <div className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
+                Progress: {Math.round((currentClue.clueNumber / totalClues) * 100)}%
+              </div>
               {location && (
                 <span className="text-xs text-green-600">📍 Location detected</span>
               )}
@@ -243,7 +360,7 @@ function PlayGame() {
           <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Current Clue</h2>
             <p className="text-lg text-gray-700 mb-4">{currentClue.question}</p>
-            
+
             {currentClue.hint && (
               <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
                 <p className="text-sm text-blue-700">
@@ -298,30 +415,26 @@ function PlayGame() {
 
           {/* Submission Result */}
           {lastSubmission && (
-            <div className={`rounded-xl shadow-lg p-6 ${
-              lastSubmission.isCorrect 
-                ? 'bg-green-50 border-green-200' 
-                : 'bg-red-50 border-red-200'
-            }`}>
+            <div className={`rounded-xl shadow-lg p-6 ${lastSubmission.isCorrect
+              ? 'bg-green-50 border-green-200'
+              : 'bg-red-50 border-red-200'
+              }`}>
               <div className="flex items-center mb-4">
-                <span className={`text-2xl mr-3 ${
-                  lastSubmission.isCorrect ? 'text-green-600' : 'text-red-600'
-                }`}>
+                <span className={`text-2xl mr-3 ${lastSubmission.isCorrect ? 'text-green-600' : 'text-red-600'
+                  }`}>
                   {lastSubmission.isCorrect ? '✅' : '❌'}
                 </span>
-                <h3 className={`text-lg font-semibold ${
-                  lastSubmission.isCorrect ? 'text-green-800' : 'text-red-800'
-                }`}>
+                <h3 className={`text-lg font-semibold ${lastSubmission.isCorrect ? 'text-green-800' : 'text-red-800'
+                  }`}>
                   {lastSubmission.isCorrect ? 'Correct!' : 'Try Again!'}
                 </h3>
               </div>
-              
-              <p className={`mb-4 ${
-                lastSubmission.isCorrect ? 'text-green-700' : 'text-red-700'
-              }`}>
+
+              <p className={`mb-4 ${lastSubmission.isCorrect ? 'text-green-700' : 'text-red-700'
+                }`}>
                 {lastSubmission.aiAnalysis}
               </p>
-              
+
               {lastSubmission.isCorrect && lastSubmission.pebblesEarned > 0 && (
                 <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-3">
                   <p className="text-yellow-800 font-medium">
@@ -329,7 +442,7 @@ function PlayGame() {
                   </p>
                 </div>
               )}
-              
+
               {lastSubmission.isCorrect && (
                 <p className="text-green-600 text-sm mt-4">
                   Moving to next clue in 3 seconds...
@@ -339,17 +452,6 @@ function PlayGame() {
           )}
         </div>
       </div>
-
-      {/* Pirate Map Loader */}
-      {showPirateMap && (
-        <PirateMapLoader 
-          onComplete={() => {
-            console.log('PirateMapLoader onComplete called')
-            setShowPirateMap(false)
-          }}
-          duration={3000} // 3 seconds for testing - change back to 10000 for production
-        />
-      )}
     </div>
   )
 }
