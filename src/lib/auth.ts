@@ -13,6 +13,7 @@ export interface JWTPayload {
   userId: string
   email: string
   role: 'USER' | 'ADMIN' | 'SUPERADMIN'
+  type?: 'access' | 'refresh' // Token type
   iat?: number // Issued at timestamp
   exp?: number // Expiration timestamp
 }
@@ -29,7 +30,72 @@ export const comparePasswords = async (
 }
 
 export const generateToken = (payload: JWTPayload): string => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' })
+  return jwt.sign({ ...payload, type: 'access' }, JWT_SECRET, { expiresIn: '1h' }) // Shorter access token
+}
+
+export const generateRefreshToken = (payload: JWTPayload): string => {
+  return jwt.sign({ ...payload, type: 'refresh' }, JWT_SECRET, { expiresIn: '30d' }) // Longer refresh token
+}
+
+export const createRefreshTokenRecord = async (userId: string, token: string): Promise<void> => {
+  const prisma = await getPrisma()
+  const expiresAt = new Date()
+  expiresAt.setDate(expiresAt.getDate() + 30) // 30 days from now
+
+  await prisma.refreshToken.create({
+    data: {
+      token,
+      userId,
+      expiresAt
+    }
+  })
+}
+
+export const validateRefreshToken = async (token: string): Promise<{ userId: string; email: string; role: string } | null> => {
+  try {
+    // Verify JWT signature first
+    const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload
+    
+    if (decoded.type !== 'refresh') {
+      throw new Error('Invalid token type')
+    }
+
+    const prisma = await getPrisma()
+    
+    // Check if refresh token exists in database and is not revoked
+    const refreshTokenRecord = await prisma.refreshToken.findUnique({
+      where: { token },
+      include: { user: true }
+    })
+
+    if (!refreshTokenRecord || refreshTokenRecord.isRevoked || refreshTokenRecord.expiresAt < new Date()) {
+      return null
+    }
+
+    return {
+      userId: refreshTokenRecord.user.id,
+      email: refreshTokenRecord.user.email,
+      role: refreshTokenRecord.user.role
+    }
+  } catch {
+    return null
+  }
+}
+
+export const revokeRefreshToken = async (token: string): Promise<void> => {
+  const prisma = await getPrisma()
+  await prisma.refreshToken.updateMany({
+    where: { token },
+    data: { isRevoked: true }
+  })
+}
+
+export const revokeAllUserRefreshTokens = async (userId: string): Promise<void> => {
+  const prisma = await getPrisma()
+  await prisma.refreshToken.updateMany({
+    where: { userId },
+    data: { isRevoked: true }
+  })
 }
 
 export const verifyToken = (token: string): JWTPayload => {

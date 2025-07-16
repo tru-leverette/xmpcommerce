@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -12,8 +12,7 @@
     "db:studio": "prisma studio",
     "db:generate": "prisma generate",
     "type-check": "tsc --noEmit",
-    "vercel-check": "echo '🚀 Running Vercel deployment checks...' && yarn type-check && yarn lint && yarn build && echo '✅ All checks passed! Ready for Vercel deployment.'",
-    "vercel-check-advanced": "node scripts/vercel-check.mjs",
+    "vercel-check": "node scripts/vercel-check.mjs",
     "pre-deploy": "yarn vercel-check",
     "quick-check": "yarn type-check && yarn lint",
     "check-all": "yarn type-check && yarn lint && yarn build"

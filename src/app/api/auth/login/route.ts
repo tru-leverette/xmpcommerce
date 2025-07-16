@@ -7,13 +7,13 @@ export const runtime = 'nodejs'
 // Lazy load dependencies to avoid build-time issues
 const loadDependencies = async () => {
   const { prisma } = await import('@/lib/prisma')
-  const { comparePasswords, generateToken } = await import('@/lib/auth')
-  return { prisma, comparePasswords, generateToken }
+  const { comparePasswords, generateToken, generateRefreshToken, createRefreshTokenRecord } = await import('@/lib/auth')
+  return { prisma, comparePasswords, generateToken, generateRefreshToken, createRefreshTokenRecord }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { prisma, comparePasswords, generateToken } = await loadDependencies()
+    const { prisma, comparePasswords, generateToken, generateRefreshToken, createRefreshTokenRecord } = await loadDependencies()
     
     const { email, password } = await request.json()
 
@@ -54,12 +54,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate JWT token
-    const token = generateToken({
+    // Generate JWT tokens (access + refresh)
+    const accessToken = generateToken({
       userId: user.id,
       email: user.email,
-      role: user.role
+      role: user.role,
+      type: 'access'
     })
+
+    const refreshToken = generateRefreshToken({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      type: 'refresh'
+    })
+
+    // Store refresh token in database
+    await createRefreshTokenRecord(user.id, refreshToken)
 
     // Log the login activity
     try {
@@ -82,7 +93,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       message: 'Login successful',
-      token,
+      accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email,

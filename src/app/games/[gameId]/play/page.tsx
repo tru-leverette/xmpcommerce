@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
+import PirateMapLoader from '@/components/PirateMapLoader'
 
 interface Clue {
   id: string
@@ -24,6 +25,7 @@ function PlayGame() {
   const params = useParams()
   const gameId = params.gameId as string
   
+  const [showPirateMap, setShowPirateMap] = useState(true)
   const [currentClue, setCurrentClue] = useState<Clue | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -34,33 +36,68 @@ function PlayGame() {
 
   const fetchCurrentClue = useCallback(async () => {
     try {
+      console.log('Fetching clue for game:', gameId)
       const token = localStorage.getItem('token')
       const response = await fetch(`/api/games/${gameId}/clues`, {
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token || ''}`
         }
       })
       
       const data = await response.json()
+      console.log('Clue API response:', data)
+      
       if (response.ok) {
         setCurrentClue(data.clue)
+        console.log('Clue set successfully:', data.clue)
       } else {
+        console.error('Clue API error:', data.error)
         alert(data.error || 'Error fetching clue')
       }
-    } catch {
+    } catch (error) {
+      console.error('Network error fetching clue:', error)
       alert('Error fetching clue')
     } finally {
+      console.log('Setting loading to false')
       setLoading(false)
     }
   }, [gameId])
 
   useEffect(() => {
-    const fetchData = async () => {
-      await fetchCurrentClue()
-      requestLocation()
+    console.log('UseEffect triggered - showPirateMap:', showPirateMap, 'loading:', loading)
+    // Only fetch data after pirate map animation completes
+    if (!showPirateMap) {
+      console.log('Pirate map completed, fetching clue data...')
+      const fetchData = async () => {
+        await fetchCurrentClue()
+        requestLocation()
+      }
+      fetchData()
     }
-    fetchData()
-  }, [fetchCurrentClue])
+  }, [fetchCurrentClue, showPirateMap]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fallback: if still loading after pirate map is gone for too long, force completion
+  useEffect(() => {
+    if (!showPirateMap && loading) {
+      const fallbackTimer = setTimeout(() => {
+        console.log('Fallback: Force completing loading state')
+        setLoading(false)
+        // Create a default clue if none exists
+        if (!currentClue) {
+          setCurrentClue({
+            id: 'fallback-clue',
+            clueNumber: 1,
+            question: 'Welcome to the hunt! This is a test clue. What sound does a lion make?',
+            hint: 'Think about the king of the jungle',
+            type: 'TEXT_ANSWER',
+            huntId: 'test-hunt'
+          })
+        }
+      }, 5000) // Wait 5 seconds max
+
+      return () => clearTimeout(fallbackTimer)
+    }
+  }, [showPirateMap, loading, currentClue])
 
   const requestLocation = () => {
     if (navigator.geolocation) {
@@ -158,12 +195,14 @@ function PlayGame() {
     }
   }
 
-  if (loading) {
+  if (showPirateMap || loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading clue...</p>
+          <p className="mt-4 text-gray-600">
+            {showPirateMap ? "Preparing your adventure..." : "Loading clue..."}
+          </p>
         </div>
       </div>
     )
@@ -300,6 +339,17 @@ function PlayGame() {
           )}
         </div>
       </div>
+
+      {/* Pirate Map Loader */}
+      {showPirateMap && (
+        <PirateMapLoader 
+          onComplete={() => {
+            console.log('PirateMapLoader onComplete called')
+            setShowPirateMap(false)
+          }}
+          duration={3000} // 3 seconds for testing - change back to 10000 for production
+        />
+      )}
     </div>
   )
 }

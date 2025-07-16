@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             title: true,
-            theme: true
+            location: true
           }
         }
       }

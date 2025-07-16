@@ -48,51 +48,103 @@ export default function UserDashboard() {
   const [totalPebbles, setTotalPebbles] = useState(0)
 
   useEffect(() => {
+    // Skip if already fetching or already loaded
+    if (!loading || (participations.length > 0 && badges.length > 0)) {
+      return
+    }
+
+    // Check session storage for cached data to prevent duplicate calls
+    const cacheKey = 'dashboard_data_' + Date.now().toString().slice(0, -5) // 5-minute cache
+    const cachedData = sessionStorage.getItem(cacheKey)
+    
+    if (cachedData) {
+      try {
+        const { user, participations, badges, totalPebbles } = JSON.parse(cachedData)
+        setUser(user)
+        setParticipations(participations)
+        setBadges(badges)
+        setTotalPebbles(totalPebbles)
+        setLoading(false)
+        return
+      } catch {
+        // Clear bad cache and continue
+        sessionStorage.removeItem(cacheKey)
+      }
+    }
+
     const fetchDashboardData = async () => {
       try {
         const token = localStorage.getItem('token')
         if (!token) {
+          setLoading(false)
           return
         }
 
-        // Fetch user profile
-        const userResponse = await fetch('/api/user/profile', {
-          headers: {
-            'Authorization': `Bearer ${token}`
+        // Get user data from token instead of API call (optimization)
+        let userData: UserData | null = null
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]))
+          userData = {
+            id: payload.userId,
+            email: payload.email,
+            username: payload.username || payload.email.split('@')[0],
+            role: payload.role
           }
-        })
+          setUser(userData)
+        } catch {
+          console.warn('Could not parse user from token, falling back to API')
+          // Fallback to API call only if token parsing fails
+          const userResponse = await fetch('/api/user/profile', {
+            headers: {
+              'Authorization': `Bearer ${token}`
+            }
+          })
 
-        if (userResponse.ok) {
-          const userData = await userResponse.json()
-          setUser(userData.user)
+          if (userResponse.ok) {
+            const userResponseData = await userResponse.json()
+            userData = userResponseData.user
+            setUser(userData)
+          }
         }
 
-        // Fetch user's game participations
-        const participationsResponse = await fetch('/api/user/participations', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
+        // Use Promise.all to fetch both endpoints simultaneously for better performance
+        const [participationsResponse, badgesResponse] = await Promise.all([
+          fetch('/api/user/participations', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }),
+          fetch('/api/user/badges', {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+        ])
+
+        let participationsData: GameParticipation[] = []
+        let badgesData: Badge[] = []
+        let totalPebblesCount = 0
 
         if (participationsResponse.ok) {
-          const participationsData = await participationsResponse.json()
-          setParticipations(participationsData.participations || [])
+          const participationsResult = await participationsResponse.json()
+          participationsData = participationsResult.participations || []
+          setParticipations(participationsData)
           
           // Calculate total pebbles
-          const total = participationsData.participations?.reduce((sum: number, p: GameParticipation) => sum + p.pebbles, 0) || 0
-          setTotalPebbles(total)
+          totalPebblesCount = participationsData.reduce((sum: number, p: GameParticipation) => sum + p.pebbles, 0)
+          setTotalPebbles(totalPebblesCount)
         }
 
-        // Fetch user's badges
-        const badgesResponse = await fetch('/api/user/badges', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        })
-
         if (badgesResponse.ok) {
-          const badgesData = await badgesResponse.json()
-          setBadges(badgesData.badges || [])
+          const badgesResult = await badgesResponse.json()
+          badgesData = badgesResult.badges || []
+          setBadges(badgesData)
+        }
+
+        // Cache the data to prevent duplicate API calls
+        if (userData && (participationsData.length > 0 || badgesData.length > 0)) {
+          sessionStorage.setItem(cacheKey, JSON.stringify({
+            user: userData,
+            participations: participationsData,
+            badges: badgesData,
+            totalPebbles: totalPebblesCount
+          }))
         }
 
       } catch (error) {
@@ -103,7 +155,7 @@ export default function UserDashboard() {
     }
 
     fetchDashboardData()
-  }, [])
+  }, [loading, participations.length, badges.length])
 
   if (loading) {
     return (

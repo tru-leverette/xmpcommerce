@@ -31,8 +31,9 @@ export default function Login() {
       const data = await response.json()
 
       if (response.ok) {
-        // Store token and redirect
-        localStorage.setItem('token', data.token || 'mock-token')
+        // Store both tokens
+        localStorage.setItem('token', data.accessToken)
+        localStorage.setItem('refreshToken', data.refreshToken)
         
         // Dispatch custom event to notify Navigation component
         window.dispatchEvent(new Event('authChange'))

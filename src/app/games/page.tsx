@@ -3,13 +3,12 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
 
 interface Game {
   id: string
   title: string
   description: string
-  theme: string
+  location: string
   status: 'PENDING' | 'UPCOMING' | 'ACTIVE' | 'COMPLETED'
   launchDate?: Date
   creator: {
@@ -125,10 +124,10 @@ function Games() {
     if (!token) {
       return (
         <button
-          onClick={() => handleNavigation("/auth/login")}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+          onClick={() => handleNavigation("/auth/register")}
+          className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700"
         >
-          Login to Join
+          Register to Join
         </button>
       )
     }
@@ -203,17 +202,52 @@ function Games() {
       <div className="bg-white shadow">
         <div className="container mx-auto px-4 py-6">
           <div className="flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-gray-900">Scavenger Quest</h1>
-            <Link 
-              href={isAuthenticated ? "/dashboard" : "/"}
-              className="text-blue-600 hover:text-blue-500 font-medium"
-              onClick={() => handleNavigation(isAuthenticated ? "/dashboard" : "/")}
-            >
-              ← {isAuthenticated ? "Back to Dashboard" : "Back to Home"}
-            </Link>
+            <h1 className="text-3xl font-bold text-gray-900">Available Games</h1>
+            {isAuthenticated && (
+              <Link 
+                href="/dashboard"
+                className="text-blue-600 hover:text-blue-500 font-medium"
+                onClick={() => handleNavigation("/dashboard")}
+              >
+                ← Back to Dashboard
+              </Link>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Visitor Information Banner */}
+      {!isAuthenticated && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0">
+                  <span className="text-2xl">👋</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Welcome, Explorer!</h3>
+                  <p className="text-gray-600">Browse our exciting scavenger hunt games. Register to join the adventure!</p>
+                </div>
+              </div>
+              <div className="flex space-x-3">
+                <Link 
+                  href="/auth/register"
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+                >
+                  Register Now
+                </Link>
+                <Link 
+                  href="/"
+                  className="text-blue-600 hover:text-blue-500 font-medium px-4 py-2"
+                >
+                  Back to Home
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Games Grid */}
       <div className="container mx-auto px-4 py-8">
@@ -239,7 +273,7 @@ function Games() {
                   <div className="space-y-2 mb-4">
                     <div className="flex items-center text-sm text-gray-500">
                       <span className="font-medium">Location:</span>
-                      <span className="ml-2">{game.theme}</span>
+                      <span className="ml-2">{game.location}</span>
                     </div>
                     <div className="flex items-center text-sm text-gray-500">
                       <span className="font-medium">Participants:</span>
@@ -301,13 +335,4 @@ function Games() {
   )
 }
 
-// Wrap the component with ProtectedRouteGuard
-function ProtectedGames() {
-  return (
-    <ProtectedRouteGuard>
-      <Games />
-    </ProtectedRouteGuard>
-  )
-}
-
-export default ProtectedGames
+export default Games

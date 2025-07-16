@@ -50,7 +50,7 @@ export async function POST(
       select: {
         id: true,
         title: true,
-        theme: true,
+        location: true,
         region: true,
         maxLatitude: true,
         minLatitude: true,
