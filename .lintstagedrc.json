@@ -1,6 +1,6 @@
 {
-  "*.{ts,tsx,js,jsx}": [
-    "eslint --fix",
-    "bash -c 'yarn type-check'"
-  ]
+    "*.{ts,tsx,js,jsx}": [
+        "eslint --fix",
+        "bash -c 'yarn type-check'"
+    ]
 }
