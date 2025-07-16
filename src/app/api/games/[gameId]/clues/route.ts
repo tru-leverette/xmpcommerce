@@ -51,7 +51,7 @@ export async function GET() {
     //   )
     // }
 
-    // Generate AI-powered clue based on current location and game theme
+    // Generate AI-powered clue based on current location and game location
     // This would integrate with OpenAI API
     const mockClue = {
       id: 'clue-1',

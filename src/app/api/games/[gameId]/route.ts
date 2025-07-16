@@ -36,16 +36,30 @@ export async function PUT(
       )
     }
 
-    const { title, theme, launchDate, status } = await request.json()
+    const { 
+      title, 
+      description,
+      location, 
+      launchDate, 
+      status,
+      region,
+      minLatitude,
+      maxLatitude,
+      minLongitude,
+      maxLongitude,
+      totalLevels,
+      stagesPerLevel,
+      cluesPerStage
+    } = await request.json()
 
-    if (!title || !theme) {
+    if (!title || !location) {
       return NextResponse.json(
         { error: 'Title and location are required' },
         { status: 400 }
       )
     }
 
-    // Get the current game to check if theme is changing
+    // Get the current game to check if location is changing
     const currentGame = await prisma.game.findUnique({
       where: { id: gameId }
     })
@@ -57,11 +71,11 @@ export async function PUT(
       )
     }
 
-    // If theme is changing, check if there's already an active game on the new continent
-    if (currentGame.theme !== theme) {
+    // If location is changing, check if there's already an active game on the new continent
+    if (currentGame.location !== location) {
       const existingGame = await prisma.game.findFirst({
         where: {
-          theme: theme,
+          location: location,
           status: {
             in: ['UPCOMING', 'ACTIVE']
           },
@@ -73,7 +87,7 @@ export async function PUT(
 
       if (existingGame) {
         return NextResponse.json(
-          { error: `A game is already active or scheduled for ${theme}. Only one game per continent is allowed at a time.` },
+          { error: `A game is already active or scheduled for ${location}. Only one game per continent is allowed at a time.` },
           { status: 409 }
         )
       }
@@ -82,19 +96,35 @@ export async function PUT(
     // Update the game in the database
     const updateData: {
       title: string
-      theme: string
+      description?: string
+      location: string
       launchDate: Date | null
-      status?: 'UPCOMING' | 'ACTIVE' | 'COMPLETED'
+      status?: 'PENDING' | 'UPCOMING' | 'ACTIVE' | 'COMPLETED'
+      region?: string | null
+      minLatitude?: number | null
+      maxLatitude?: number | null
+      minLongitude?: number | null
+      maxLongitude?: number | null
+      totalLevels?: number
+      stagesPerLevel?: number
+      cluesPerStage?: number
     } = {
       title,
-      theme,
+      location,
       launchDate: launchDate ? new Date(launchDate) : null
     }
 
-    // Only update status if it's provided
-    if (status) {
-      updateData.status = status as 'UPCOMING' | 'ACTIVE' | 'COMPLETED'
-    }
+    // Add optional fields if they're provided
+    if (description !== undefined) updateData.description = description
+    if (status) updateData.status = status as 'PENDING' | 'UPCOMING' | 'ACTIVE' | 'COMPLETED'
+    if (region !== undefined) updateData.region = region || null
+    if (minLatitude !== undefined) updateData.minLatitude = minLatitude ? Number(minLatitude) : null
+    if (maxLatitude !== undefined) updateData.maxLatitude = maxLatitude ? Number(maxLatitude) : null
+    if (minLongitude !== undefined) updateData.minLongitude = minLongitude ? Number(minLongitude) : null
+    if (maxLongitude !== undefined) updateData.maxLongitude = maxLongitude ? Number(maxLongitude) : null
+    if (totalLevels !== undefined) updateData.totalLevels = Number(totalLevels)
+    if (stagesPerLevel !== undefined) updateData.stagesPerLevel = Number(stagesPerLevel)
+    if (cluesPerStage !== undefined) updateData.cluesPerStage = Number(cluesPerStage)
 
     const game = await prisma.game.update({
       where: { id: gameId },
@@ -117,7 +147,7 @@ export async function PUT(
     try {
       const changes = []
       if (currentGame.title !== title) changes.push(`title: "${currentGame.title}" → "${title}"`)
-      if (currentGame.theme !== theme) changes.push(`continent: "${currentGame.theme}" → "${theme}"`)
+      if (currentGame.location !== location) changes.push(`continent: "${currentGame.location}" → "${location}"`)
       if (status && currentGame.status !== status) changes.push(`status: "${currentGame.status}" → "${status}"`)
       if (currentGame.launchDate !== updateData.launchDate) {
         const oldDate = currentGame.launchDate ? new Date(currentGame.launchDate).toLocaleDateString() : 'None'
@@ -235,7 +265,7 @@ export async function DELETE(
       select: {
         id: true,
         title: true,
-        theme: true
+        location: true
       }
     })
 
@@ -255,12 +285,12 @@ export async function DELETE(
       await prisma.activity.create({
         data: {
           type: 'GAME_DELETED',
-          description: `Deleted game "${gameToDelete.title}" from ${gameToDelete.theme}`,
+          description: `Deleted game "${gameToDelete.title}" from ${gameToDelete.location}`,
           userId: decoded.userId,
           details: {
             gameId: gameToDelete.id,
             gameTitle: gameToDelete.title,
-            continent: gameToDelete.theme
+            continent: gameToDelete.location
           }
         }
       })

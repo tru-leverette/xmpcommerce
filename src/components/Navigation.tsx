@@ -207,6 +207,14 @@ export default function Navigation() {
 
           {/* Navigation Links */}
           <div className="flex items-center space-x-6">
+            {/* Games link - available to everyone */}
+            <Link 
+              href="/games" 
+              className="text-gray-700 hover:text-blue-600"
+            >
+              Games
+            </Link>
+            
             {!isAuthenticated ? (
               <>
                 <Link 
@@ -224,6 +232,13 @@ export default function Navigation() {
               </>
             ) : (
               <div className="flex items-center space-x-6">
+                {/* Dashboard link for authenticated users */}
+                <Link 
+                  href="/dashboard" 
+                  className="text-gray-700 hover:text-blue-600"
+                >
+                  Dashboard
+                </Link>
                 
                 {/* User Avatar Dropdown */}
                 <div className="relative" ref={dropdownRef}>

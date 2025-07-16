@@ -8,17 +8,18 @@ datasource db {
 }
 
 model User {
-  id           String        @id @default(cuid())
-  email        String        @unique
-  username     String        @unique
+  id           String         @id @default(cuid())
+  email        String         @unique
+  username     String         @unique
   password     String
-  role         UserRole      @default(USER)
-  status       UserStatus    @default(ACTIVE)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  role         UserRole       @default(USER)
+  status       UserStatus     @default(ACTIVE)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   createdGames Game[]
   participants Participant[]
   activities   Activity[]
+  refreshTokens RefreshToken[]
 
   @@map("users")
 }
@@ -27,7 +28,7 @@ model Game {
   id              String        @id @default(cuid())
   title           String
   description     String
-  theme           String        // e.g., "Africa", "Europe", "Asia"
+  location        String        // e.g., "Africa", "Europe", "Asia"
   status          GameStatus    @default(PENDING)
   launchDate      DateTime?
   region          String?       // Geographic region for geolocation matching
@@ -289,9 +290,23 @@ enum ActivityType {
   USER_LOGOUT
   USER_BANNED
   USER_UNBANNED
+  TOKEN_REFRESH
 }
 
 enum BadgeType {
   STAGE
   LEVEL
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique @db.VarChar(500)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isRevoked Boolean  @default(false)
+
+  @@index([userId])
+  @@map("refresh_tokens")
 }

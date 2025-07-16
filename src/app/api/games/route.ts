@@ -99,9 +99,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { title, theme, launchDate, password } = await request.json()
+    const { title, location, launchDate, password } = await request.json()
 
-    if (!title || !theme) {
+    if (!title || !location) {
       return NextResponse.json(
         { error: 'Title and location are required' },
         { status: 400 }
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
     // Check if there's already an active game on this continent
     const existingGame = await prisma.game.findFirst({
       where: {
-        theme: theme,
+        location: location,
         status: {
           in: ['UPCOMING', 'ACTIVE']
         }
@@ -149,7 +149,7 @@ export async function POST(request: NextRequest) {
 
     if (existingGame) {
       return NextResponse.json(
-        { error: `A game is already active or scheduled for ${theme}. Only one game per continent is allowed at a time.` },
+        { error: `A game is already active or scheduled for ${location}. Only one game per continent is allowed at a time.` },
         { status: 409 }
       )
     }
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
       data: {
         title,
         description: '', // Empty description as we removed this field from the form
-        theme,
+        location,
         creatorId: decoded.userId,
         status: 'UPCOMING',
         launchDate: launchDate ? new Date(launchDate) : null
@@ -183,12 +183,12 @@ export async function POST(request: NextRequest) {
       await prisma.activity.create({
         data: {
           type: 'GAME_CREATED',
-          description: `Created game "${title}" for ${theme}`,
+          description: `Created game "${title}" for ${location}`,
           userId: decoded.userId,
           details: {
             gameId: game.id,
             gameTitle: title,
-            continent: theme,
+            continent: location,
             launchDate: launchDate || null
           }
         }

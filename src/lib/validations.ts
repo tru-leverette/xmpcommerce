@@ -14,7 +14,7 @@ export const loginSchema = {
 export const createGameSchema = {
   title: '',
   description: '',
-  theme: ''
+  location: ''
 }
 
 // Clue submission schemas

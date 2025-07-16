@@ -37,6 +37,32 @@ export default function ProfilePage() {
           return
         }
 
+        // Try to get user data from token first (optimization)
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]))
+          const userData = {
+            id: payload.userId,
+            email: payload.email,
+            username: payload.username || payload.email.split('@')[0],
+            role: payload.role,
+            status: 'ACTIVE', // Default from token
+            createdAt: new Date().toISOString() // Approximate
+          }
+          setUser(userData)
+          setFormData({
+            username: userData.username,
+            email: userData.email,
+            currentPassword: '',
+            newPassword: '',
+            confirmPassword: ''
+          })
+          setLoading(false)
+          return
+        } catch {
+          console.log('Token parsing failed, fetching from API')
+        }
+
+        // Fallback to API call if token parsing fails
         const response = await fetch('/api/user/profile', {
           headers: {
             'Authorization': `Bearer ${token}`
