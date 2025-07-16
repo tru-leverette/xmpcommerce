@@ -1,0 +1,22 @@
+{
+    "typescript.preferences.validateDefaultNpmLocation": true,
+    "typescript.validate.enable": true,
+    "typescript.format.enable": true,
+    "typescript.suggest.autoImports": true,
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit",
+        "source.organizeImports": "explicit"
+    },
+    "eslint.validate": [
+        "javascript",
+        "javascriptreact",
+        "typescript",
+        "typescriptreact"
+    ],
+    "files.associations": {
+        "*.tsx": "typescriptreact",
+        "*.ts": "typescript"
+    },
+    "typescript.preferences.includePackageJsonAutoImports": "auto"
+}

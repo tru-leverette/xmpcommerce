@@ -1,0 +1,28 @@
+#!/bin/sh
+echo "🔍 Running pre-push checks..."
+
+# Run type checking
+echo "📝 Checking TypeScript..."
+yarn type-check
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript check failed. Push aborted."
+  exit 1
+fi
+
+# Run linting
+echo "🧹 Running ESLint..."
+yarn lint
+if [ $? -ne 0 ]; then
+  echo "❌ ESLint check failed. Push aborted."
+  exit 1
+fi
+
+# Run build to ensure everything compiles
+echo "🏗️ Building project..."
+yarn build
+if [ $? -ne 0 ]; then
+  echo "❌ Build failed. Push aborted."
+  exit 1
+fi
+
+echo "✅ All pre-push checks passed! Pushing to remote..."

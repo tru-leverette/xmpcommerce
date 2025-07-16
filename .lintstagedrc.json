@@ -1,0 +1,9 @@
+{
+  "*.{ts,tsx}": [
+    "yarn type-check",
+    "eslint --fix"
+  ],
+  "*.{js,jsx}": [
+    "eslint --fix"
+  ]
+}
