@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import { NextRequest, NextResponse } from 'next/server'
 
 // Dynamic route configuration to prevent static generation
 export const dynamic = 'force-dynamic'
@@ -14,12 +14,12 @@ export async function PUT(
     // Lazy load dependencies
     const { prisma } = await import('@/lib/prisma')
     const { verifyToken, getTokenFromHeader } = await import('@/lib/auth')
-    
+
     const { gameId } = await params
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
-    
+
     if (!token) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -28,7 +28,7 @@ export async function PUT(
     }
 
     const decoded = verifyToken(token)
-    
+
     if (decoded.role !== 'SUPERADMIN') {
       return NextResponse.json(
         { error: 'Insufficient permissions' },
@@ -36,11 +36,11 @@ export async function PUT(
       )
     }
 
-    const { 
-      title, 
+    const {
+      title,
       description,
-      location, 
-      launchDate, 
+      location,
+      launchDate,
       status,
       region,
       minLatitude,
@@ -205,12 +205,12 @@ export async function DELETE(
     // Lazy load dependencies
     const { prisma } = await import('@/lib/prisma')
     const { verifyToken, getTokenFromHeader } = await import('@/lib/auth')
-    
+
     const { gameId } = await params
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
-    
+
     if (!token) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -219,7 +219,7 @@ export async function DELETE(
     }
 
     const decoded = verifyToken(token)
-    
+
     if (decoded.role !== 'SUPERADMIN') {
       return NextResponse.json(
         { error: 'Insufficient permissions' },
@@ -259,7 +259,7 @@ export async function DELETE(
       )
     }
 
-    // Delete the game from the database
+    // Delete the game and all related records
     const gameToDelete = await prisma.game.findUnique({
       where: { id: gameId },
       select: {
@@ -276,8 +276,114 @@ export async function DELETE(
       )
     }
 
-    await prisma.game.delete({
-      where: { id: gameId }
+    // Delete all related records in the correct order to respect foreign key constraints
+    await prisma.$transaction(async (tx) => {
+      // Delete clue submissions first
+      await tx.clueSubmission.deleteMany({
+        where: {
+          participant: {
+            gameId: gameId
+          }
+        }
+      })
+
+      // Delete clues
+      await tx.clue.deleteMany({
+        where: {
+          hunt: {
+            stage: {
+              level: {
+                gameId: gameId
+              }
+            }
+          }
+        }
+      })
+
+      // Delete hunts
+      await tx.hunt.deleteMany({
+        where: {
+          stage: {
+            level: {
+              gameId: gameId
+            }
+          }
+        }
+      })
+
+      // Delete badges
+      await tx.badge.deleteMany({
+        where: {
+          progress: {
+            participant: {
+              gameId: gameId
+            }
+          }
+        }
+      })
+
+      // Delete participant progress
+      await tx.participantProgress.deleteMany({
+        where: {
+          participant: {
+            gameId: gameId
+          }
+        }
+      })
+
+      // Delete transactions and wallets
+      await tx.transaction.deleteMany({
+        where: {
+          wallet: {
+            participant: {
+              gameId: gameId
+            }
+          }
+        }
+      })
+
+      await tx.wallet.deleteMany({
+        where: {
+          participant: {
+            gameId: gameId
+          }
+        }
+      })
+
+      // Delete participants
+      await tx.participant.deleteMany({
+        where: {
+          gameId: gameId
+        }
+      })
+
+      // Delete clue sets
+      await tx.clueSet.deleteMany({
+        where: {
+          gameId: gameId
+        }
+      })
+
+      // Delete stages
+      await tx.stage.deleteMany({
+        where: {
+          level: {
+            gameId: gameId
+          }
+        }
+      })
+
+      // Delete levels
+      await tx.level.deleteMany({
+        where: {
+          gameId: gameId
+        }
+      })
+
+      // Finally delete the game
+      await tx.game.delete({
+        where: { id: gameId }
+      })
     })
 
     // Log the activity

@@ -2,6 +2,13 @@
 
 import PirateMapLoader from '@/components/PirateMapLoader'
 import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
+import {
+  ErrorTypes,
+  getUserFriendlyErrorMessage,
+  handleApiError,
+  handleGeolocationError,
+  handleNetworkError
+} from '@/lib/errorHandling'
 import { useParams } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -34,13 +41,15 @@ function PlayGame() {
   const [location, setLocation] = useState<{ lat: number, lng: number } | null>(null)
   const [lastSubmission, setLastSubmission] = useState<Submission | null>(null)
   const [currentClueNumber, setCurrentClueNumber] = useState(1)
-  const [totalClues, setTotalClues] = useState(10)
+  const [totalClues, setTotalClues] = useState(4)
   const [gameComplete, setGameComplete] = useState(false)
 
   // Fetch user's progress from database
   const fetchProgress = useCallback(async () => {
     try {
       const token = localStorage.getItem('token')
+      const userId = localStorage.getItem('userId')
+
       const response = await fetch(`/api/games/${gameId}/progress`, {
         headers: {
           'Authorization': `Bearer ${token || ''}`
@@ -55,11 +64,24 @@ function PlayGame() {
         setGameComplete(progress.isGameComplete)
         return progress.currentClueNumber
       } else {
-        console.error('Progress API error:', data.error)
+        const errorDetails = await handleApiError(response, {
+          endpoint: `/api/games/${gameId}/progress`,
+          method: 'GET',
+          gameId,
+          userId: userId || undefined
+        })
+
+        console.error('Progress fetch API error:', errorDetails)
         return 1 // Default to first clue
       }
     } catch (error) {
-      console.error('Error fetching progress:', error)
+      const errorDetails = handleNetworkError(error as Error, {
+        operation: 'fetch_progress',
+        gameId,
+        userId: localStorage.getItem('userId') || undefined
+      })
+
+      console.error('Progress fetch network error:', errorDetails)
       return 1 // Default to first clue
     }
   }, [gameId])
@@ -68,7 +90,9 @@ function PlayGame() {
   const updateProgress = useCallback(async (clueNumber: number, isCorrect: boolean, submissionData?: object) => {
     try {
       const token = localStorage.getItem('token')
-      await fetch(`/api/games/${gameId}/progress`, {
+      const userId = localStorage.getItem('userId')
+
+      const response = await fetch(`/api/games/${gameId}/progress`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -77,44 +101,132 @@ function PlayGame() {
         body: JSON.stringify({
           clueNumber,
           isCorrect,
-          submissionData
+          submissionData,
+          timestamp: new Date().toISOString()
         })
       })
+
+      if (!response.ok) {
+        const errorDetails = await handleApiError(response, {
+          endpoint: `/api/games/${gameId}/progress`,
+          method: 'POST',
+          gameId,
+          userId: userId || undefined
+        })
+
+        console.error('Progress update API error:', errorDetails)
+        throw new Error(`Progress update failed: ${errorDetails.errorMessage}`)
+      }
+
+      const data = await response.json()
+      console.log('Progress updated successfully:', data)
+      return data
     } catch (error) {
-      console.error('Error updating progress:', error)
+      const errorDetails = handleNetworkError(error as Error, {
+        operation: 'update_progress',
+        gameId,
+        userId: localStorage.getItem('userId') || undefined
+      })
+
+      console.error('Progress update network error:', errorDetails)
+      throw error
     }
   }, [gameId])
-
   const fetchCurrentClue = useCallback(async (clueNumber = currentClueNumber) => {
     try {
       console.log('Fetching clue for game:', gameId, 'clueNumber:', clueNumber)
       const token = localStorage.getItem('token')
-      const response = await fetch(`/api/games/${gameId}/clues?clueNumber=${clueNumber}`, {
+      const userId = localStorage.getItem('userId')
+
+      // Build URL with location parameters if available
+      let url = `/api/games/${gameId}/clues?clueNumber=${clueNumber}`
+      if (location) {
+        url += `&lat=${location.lat}&lng=${location.lng}`
+      }
+
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token || ''}`
         }
       })
 
+      // Enhanced API error handling
+      if (!response.ok) {
+        const errorDetails = await handleApiError(response, {
+          endpoint: url,
+          method: 'GET',
+          gameId,
+          userId: userId || undefined
+        })
+
+        const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
+        console.error('Clue API error details:', errorDetails)
+        alert(`Error loading clue: ${userMessage}`)
+        return
+      }
+
       const data = await response.json()
       console.log('Clue API response:', data)
 
-      if (response.ok) {
+      if (data.clue) {
         setCurrentClue(data.clue)
-        setTotalClues(data.totalClues || 10)
+        setTotalClues(data.totalClues || 4)
         setCurrentClueNumber(data.clue.clueNumber)
         console.log('Clue set successfully:', data.clue)
+
+        // Log clue set information if available
+        if (data.clueSetInfo) {
+          console.log('Assigned to clue set:', data.clueSetInfo)
+        }
       } else {
-        console.error('Clue API error:', data.error)
-        alert(data.error || 'Error fetching clue')
+        // Handle case where no clue is returned
+        const errorDetails = {
+          errorType: ErrorTypes.CLUE_LOADING_ERROR,
+          errorMessage: 'No clue data returned from server',
+          timestamp: new Date().toISOString(),
+          gameId,
+          userId: userId || undefined,
+          additionalContext: {
+            requestedClueNumber: clueNumber,
+            responseData: data,
+            endpoint: url
+          }
+        }
+
+        // Log the error
+        fetch('/api/activities', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify({
+            type: 'ERROR_OCCURRED',
+            description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
+            details: errorDetails,
+            userId: userId || 'anonymous'
+          })
+        }).catch(logError => console.error('Failed to log clue loading error:', logError))
+
+        const userMessage = getUserFriendlyErrorMessage(ErrorTypes.CLUE_LOADING_ERROR)
+        alert(userMessage)
       }
     } catch (error) {
-      console.error('Network error fetching clue:', error)
-      alert('Error fetching clue')
+      // Enhanced network error handling
+      const errorDetails = handleNetworkError(error as Error, {
+        operation: 'fetch_current_clue',
+        gameId,
+        userId: localStorage.getItem('userId') || undefined
+      })
+
+      console.error('Network error fetching clue:', errorDetails)
+      const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
+      alert(`Network error: ${userMessage}`)
     } finally {
       console.log('Setting loading to false')
       setLoading(false)
     }
-  }, [gameId, currentClueNumber])
+  }, [gameId, currentClueNumber, location])
 
   useEffect(() => {
     console.log('UseEffect triggered - showPirateMap:', showPirateMap, 'loading:', loading)
@@ -163,12 +275,77 @@ function PlayGame() {
             lat: position.coords.latitude,
             lng: position.coords.longitude
           })
+          console.log('Location obtained successfully:', position.coords.latitude, position.coords.longitude)
         },
         (error) => {
-          console.error('Error getting location:', error)
-          alert('Location access is required for this game. Please enable location services.')
+          // Use enhanced error handling
+          const errorDetails = handleGeolocationError(error, gameId, localStorage.getItem('userId') || undefined)
+          const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
+
+          console.error('Geolocation error details:', errorDetails)
+
+          // For development/testing, set a default location (Calabar, Nigeria)
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Using default location for development due to:', errorDetails.errorMessage)
+            setLocation({
+              lat: 4.9518,
+              lng: 8.3229
+            })
+            alert(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
+          } else {
+            alert(userMessage)
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
         }
       )
+    } else {
+      console.error('Geolocation is not supported by this browser')
+
+      // Enhanced error handling for unsupported browsers
+      const errorDetails = {
+        errorType: ErrorTypes.GEOLOCATION_NOT_SUPPORTED,
+        errorMessage: 'Browser does not support geolocation API',
+        timestamp: new Date().toISOString(),
+        gameId,
+        additionalContext: {
+          userAgent: navigator.userAgent,
+          browserSupportsGeolocation: false,
+          errorOccurredAt: 'game_play_location_request'
+        }
+      }
+
+      // Log the error
+      fetch('/api/activities', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify({
+          type: 'ERROR_OCCURRED',
+          description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
+          details: errorDetails,
+          userId: localStorage.getItem('userId') || 'anonymous'
+        })
+      }).catch(logError => console.error('Failed to log geolocation error:', logError))
+
+      const userMessage = getUserFriendlyErrorMessage(ErrorTypes.GEOLOCATION_NOT_SUPPORTED)
+
+      // Fallback for browsers without geolocation
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Using default location - geolocation not supported')
+        setLocation({
+          lat: 4.9518,
+          lng: 8.3229
+        })
+        alert(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
+      } else {
+        alert(userMessage)
+      }
     }
   }
 
@@ -179,12 +356,46 @@ function PlayGame() {
   }
 
   const submitAnswer = async () => {
-    if (!currentClue || !location) return
+    if (!currentClue || !location) {
+      const errorMessage = !currentClue ? 'No clue available to submit answer for' : 'Location not available for submission'
+
+      // Log validation error
+      const errorDetails = {
+        errorType: ErrorTypes.VALIDATION_ERROR,
+        errorMessage,
+        timestamp: new Date().toISOString(),
+        gameId,
+        userId: localStorage.getItem('userId') || undefined,
+        additionalContext: {
+          hasCurrentClue: !!currentClue,
+          hasLocation: !!location,
+          errorOccurredAt: 'submit_answer_validation'
+        }
+      }
+
+      fetch('/api/activities', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        },
+        body: JSON.stringify({
+          type: 'ERROR_OCCURRED',
+          description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
+          details: errorDetails,
+          userId: localStorage.getItem('userId') || 'anonymous'
+        })
+      }).catch(logError => console.error('Failed to log validation error:', logError))
+
+      alert(errorMessage)
+      return
+    }
 
     setSubmitting(true)
 
     try {
       const token = localStorage.getItem('token')
+      const userId = localStorage.getItem('userId')
 
       const submissionData: {
         clueId: string
@@ -197,6 +408,7 @@ function PlayGame() {
         location
       }
 
+      // Validate submission based on clue type
       if (currentClue.type === 'TEXT_ANSWER' || currentClue.type === 'COMBINED') {
         if (!textAnswer.trim()) {
           alert('Please enter an answer')
@@ -228,20 +440,47 @@ function PlayGame() {
         body: JSON.stringify(submissionData)
       })
 
+      // Enhanced API error handling
+      if (!response.ok) {
+        const errorDetails = await handleApiError(response, {
+          endpoint: `/api/games/${gameId}/clues`,
+          method: 'POST',
+          gameId,
+          userId: userId || undefined
+        })
+
+        const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
+        console.error('Submission API error details:', errorDetails)
+        alert(`Error submitting answer: ${userMessage}`)
+        return
+      }
+
       const data = await response.json()
 
-      if (response.ok) {
+      if (data.submission) {
         setLastSubmission(data.submission)
 
         // Update progress in database
-        await updateProgress(currentClueNumber, data.submission.isCorrect, submissionData)
+        try {
+          await updateProgress(currentClueNumber, data.submission.isCorrect, submissionData)
+        } catch (progressError) {
+          // Log progress update error but don't block user flow
+          const errorDetails = handleNetworkError(progressError as Error, {
+            operation: 'update_progress',
+            gameId,
+            userId: userId || undefined
+          })
+
+          console.error('Progress update error:', errorDetails)
+          // Don't alert the user, just log it
+        }
 
         if (data.submission.isCorrect) {
           if (data.isGameComplete) {
             setGameComplete(true)
             // Show completion message
             setTimeout(() => {
-              alert('🎉 Congratulations! You\'ve completed the scavenger hunt! Well done, treasure hunter!')
+              alert('🎉 Congratulations! You\'ve completed this stage! Well done, treasure hunter!')
             }, 1000)
           } else if (data.nextClueNumber) {
             // Move to next clue after a delay
@@ -255,10 +494,47 @@ function PlayGame() {
           }
         }
       } else {
-        alert(data.error || 'Error submitting answer')
+        // Handle unexpected response format
+        const errorDetails = {
+          errorType: ErrorTypes.SUBMISSION_ERROR,
+          errorMessage: 'Unexpected response format from submission API',
+          timestamp: new Date().toISOString(),
+          gameId,
+          userId: userId || undefined,
+          additionalContext: {
+            responseData: data,
+            submissionData,
+            errorOccurredAt: 'submit_answer_response_processing'
+          }
+        }
+
+        fetch('/api/activities', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify({
+            type: 'ERROR_OCCURRED',
+            description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
+            details: errorDetails,
+            userId: userId || 'anonymous'
+          })
+        }).catch(logError => console.error('Failed to log submission error:', logError))
+
+        alert('Unexpected response format. Please try again.')
       }
-    } catch {
-      alert('Error submitting answer')
+    } catch (error) {
+      // Enhanced network error handling
+      const errorDetails = handleNetworkError(error as Error, {
+        operation: 'submit_answer',
+        gameId,
+        userId: localStorage.getItem('userId') || undefined
+      })
+
+      console.error('Network error submitting answer:', errorDetails)
+      const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
+      alert(`Network error: ${userMessage}`)
     } finally {
       setSubmitting(false)
     }
@@ -300,7 +576,7 @@ function PlayGame() {
                 Congratulations, Treasure Hunter!
               </h1>
               <p className="text-lg text-gray-700 mb-6">
-                You&apos;ve successfully completed the scavenger hunt! You found all {totalClues} clues and proved yourself as a true adventurer.
+                You&apos;ve successfully completed this stage! You found all {totalClues} clues and proved yourself as a true adventurer.
               </p>
               <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-4 mb-6">
                 <p className="text-yellow-800 font-medium">

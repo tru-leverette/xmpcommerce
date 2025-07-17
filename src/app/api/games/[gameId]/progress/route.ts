@@ -69,29 +69,29 @@ export async function GET(
                 isValid: false
             },
 
-            // Completed items (arrays of IDs)
-            completedClues: [], // ClueSubmission IDs where isCorrect=true
-            completedHunts: [],
-            completedStages: [],
-            completedLevels: [],
-
-            // Badges earned
-            badges: [
-                // {
-                //   id: "badge-1",
-                //   name: "Stage 1 Explorer", 
-                //   badgeType: "STAGE",
-                //   levelNumber: 1,
-                //   stageNumber: 1,
-                //   earnedAt: "2025-07-16T10:30:00Z"
-                // }
-            ],
-
-            // Game metadata
-            totalClues: 10, // Simplified for current mock system
-            totalLevels: 12,
-            totalStagesPerLevel: 4,
-            totalCluesPerStage: 4,
+      // Completed items (arrays of IDs)
+      completedClues: [], // ClueSubmission IDs where isCorrect=true
+      completedHunts: [],
+      completedStages: [],
+      completedLevels: [],
+      
+      // Badges earned
+      badges: [
+        // {
+        //   id: "badge-1",
+        //   name: "Stage 1 Explorer", 
+        //   badgeType: "STAGE",
+        //   levelNumber: 1,
+        //   stageNumber: 1,
+        //   earnedAt: "2025-07-16T10:30:00Z"
+        // }
+      ],
+      
+      // Game metadata
+      totalClues: 4, // 4 clues per stage (simplified for current system)
+      totalLevels: 12,
+      totalStagesPerLevel: 4,
+      totalCluesPerStage: 4,
 
             // Timestamps
             startedAt: new Date().toISOString(),
