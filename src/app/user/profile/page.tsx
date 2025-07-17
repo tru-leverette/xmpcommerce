@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
+import { showToast } from '@/lib/toast'
 
 interface UserData {
   id: string
@@ -171,13 +172,13 @@ export default function ProfilePage() {
           newPassword: '',
           confirmPassword: ''
         }))
-        alert('Profile updated successfully!')
+        showToast.success('Profile updated successfully!')
       } else {
-        alert(data.error || 'Failed to update profile')
+        showToast.error(data.error || 'Failed to update profile')
       }
     } catch (error) {
       console.error('Error updating profile:', error)
-      alert('Error updating profile')
+      showToast.error('Error updating profile')
     } finally {
       setSaving(false)
     }
