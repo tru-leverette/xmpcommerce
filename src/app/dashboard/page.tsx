@@ -271,8 +271,8 @@ export default function UserDashboard() {
                         <div className="flex justify-between items-start mb-2">
                           <h3 className="font-semibold text-gray-900">{participation.game.title}</h3>
                           <span className={`px-2 py-1 text-xs rounded-full ${participation.status === 'ACTIVE'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-800'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
                             }`}>
                             {participation.status}
                           </span>
@@ -282,7 +282,7 @@ export default function UserDashboard() {
                           <div className="flex items-center space-x-4 text-sm text-gray-500">
                             <span>💎 {participation.pebbles} pebbles</span>
                             {participation.progress.length > 0 && (
-                              <span>Level {participation.progress[0].currentLevel}</span>
+                              <span>Level {participation.progress[0].currentLevel} Stage {participation.progress[0].currentStage} Clue {participation.progress[0].currentClue}</span>
                             )}
                           </div>
                           <Link

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useState } from 'react'
 
 interface Game {
   id: string
@@ -34,13 +34,53 @@ function Games() {
     router.push(url)
   }
 
+  const fetchGames = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const headers: HeadersInit = {}
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`
+      }
+
+      const response = await fetch('/api/games', { headers })
+      const data = await response.json()
+      const gamesData = data.games || []
+      setGames(gamesData)
+
+      // Cache the data to prevent duplicate API calls
+      const cacheKey = 'games_data_' + Date.now().toString().slice(0, -5) // 5-minute cache
+      sessionStorage.setItem(cacheKey, JSON.stringify({ games: gamesData }))
+    } catch (error) {
+      console.error('Error fetching games:', error)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    // Check authentication status
+    // Check authentication status and fetch games only once
     const token = localStorage.getItem('token')
     setIsAuthenticated(!!token)
-    
+
+    // Add caching to prevent duplicate API calls
+    const cacheKey = 'games_data_' + Date.now().toString().slice(0, -5) // 5-minute cache
+    const cachedData = sessionStorage.getItem(cacheKey)
+
+    if (cachedData) {
+      try {
+        const { games } = JSON.parse(cachedData)
+        setGames(games || [])
+        setLoading(false)
+        return
+      } catch {
+        // Clear bad cache and continue
+        sessionStorage.removeItem(cacheKey)
+      }
+    }
+
     fetchGames()
-  }, [])
+  }, [fetchGames])
 
   useEffect(() => {
     // Reset navigation loading state after a short delay
@@ -49,31 +89,12 @@ function Games() {
       const timer = setTimeout(() => {
         setIsNavigating(false)
       }, 1000) // Reset after 1 second max
-      
+
       return () => clearTimeout(timer)
     }
   }, [isNavigating])
 
-  const fetchGames = async () => {
-    try {
-      const token = localStorage.getItem('token')
-      const headers: HeadersInit = {}
-      
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`
-      }
-      
-      const response = await fetch('/api/games', { headers })
-      const data = await response.json()
-      setGames(data.games || [])
-    } catch (error) {
-      console.error('Error fetching games:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const registerForGame = async (gameId: string) => {
+  const registerForGame = useCallback(async (gameId: string) => {
     setRegistering(gameId)
     try {
       const token = localStorage.getItem('token')
@@ -86,13 +107,13 @@ function Games() {
       })
 
       const data = await response.json()
-      
+
       if (response.ok) {
         alert('Successfully registered for the game!')
         // Update the local state to show registration status
-        setGames(prevGames => 
-          prevGames.map(game => 
-            game.id === gameId 
+        setGames(prevGames =>
+          prevGames.map(game =>
+            game.id === gameId
               ? { ...game, isRegistered: true, _count: { ...game._count, participants: game._count.participants + 1 } }
               : game
           )
@@ -106,7 +127,7 @@ function Games() {
     } finally {
       setRegistering(null)
     }
-  }
+  }, [])
 
   const getStatusBadge = (status: string) => {
     const styles = {
@@ -120,7 +141,7 @@ function Games() {
 
   const getActionButton = (game: Game) => {
     const token = localStorage.getItem('token')
-    
+
     if (!token) {
       return (
         <button
@@ -204,7 +225,7 @@ function Games() {
           <div className="flex justify-between items-center">
             <h1 className="text-3xl font-bold text-gray-900">Available Games</h1>
             {isAuthenticated && (
-              <Link 
+              <Link
                 href="/dashboard"
                 className="text-blue-600 hover:text-blue-500 font-medium"
                 onClick={() => handleNavigation("/dashboard")}
@@ -231,13 +252,13 @@ function Games() {
                 </div>
               </div>
               <div className="flex space-x-3">
-                <Link 
+                <Link
                   href="/auth/register"
                   className="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
                 >
                   Register Now
                 </Link>
-                <Link 
+                <Link
                   href="/"
                   className="text-blue-600 hover:text-blue-500 font-medium px-4 py-2"
                 >
@@ -267,9 +288,9 @@ function Games() {
                       {game.status}
                     </span>
                   </div>
-                  
+
                   <p className="text-gray-600 mb-4">{game.description}</p>
-                  
+
                   <div className="space-y-2 mb-4">
                     <div className="flex items-center text-sm text-gray-500">
                       <span className="font-medium">Location:</span>
@@ -292,19 +313,19 @@ function Games() {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="flex justify-end">
                     {getActionButton(game)}
                   </div>
                 </div>
-                
+
                 {/* Gray overlay for registered games - covers entire card */}
                 {game.isRegistered && game.status === 'UPCOMING' && (
                   <div
-                    id="registered-overlay" 
+                    id="registered-overlay"
                     className="absolute inset-0 rounded-xl flex items-center justify-center transition-all duration-200 group"
-                    style={{ 
-                      backgroundColor: 'rgba(107, 114, 128, 0.5)' 
+                    style={{
+                      backgroundColor: 'rgba(107, 114, 128, 0.5)'
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.backgroundColor = 'rgba(107, 114, 128, 0.6)'
