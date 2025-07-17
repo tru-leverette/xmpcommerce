@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
-import "./globals.css";
 import Navigation from "@/components/Navigation";
+import type { Metadata } from "next";
 import { Toaster } from 'react-hot-toast';
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Scavenger Hunt Platform",
@@ -18,7 +18,7 @@ export default function RootLayout({
       <body className="antialiased">
         <Navigation />
         {children}
-        <Toaster 
+        <Toaster
           position="top-right"
           toastOptions={{
             duration: 5000,

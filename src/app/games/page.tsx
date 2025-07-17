@@ -1,9 +1,9 @@
 'use client'
 
+import { showToast } from '@/lib/toast'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
-import { showToast } from '@/lib/toast'
 
 interface Game {
   id: string
