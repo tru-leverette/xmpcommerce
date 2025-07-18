@@ -7,7 +7,8 @@ import {
   getUserFriendlyErrorMessage,
   handleApiError,
   handleGeolocationError,
-  handleNetworkError
+  handleNetworkError,
+  logError
 } from '@/lib/errorHandling'
 import { showToast } from '@/lib/toast'
 import { useParams } from 'next/navigation'
@@ -163,7 +164,7 @@ function PlayGame() {
 
         const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
         console.error('Clue API error details:', errorDetails)
-        
+
         // Set error state to prevent recursive calls
         setGameError(`Error loading clue: ${userMessage}`)
         showToast.error(`Error loading clue: ${userMessage}`)
@@ -199,20 +200,8 @@ function PlayGame() {
           }
         }
 
-        // Log the error
-        fetch('/api/activities', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token || ''}`
-          },
-          body: JSON.stringify({
-            type: 'ERROR_OCCURRED',
-            description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
-            details: errorDetails,
-            userId: userId || 'anonymous'
-          })
-        }).catch(logError => console.error('Failed to log clue loading error:', logError))
+        // Log the error using the proper utility
+        await logError(errorDetails)
 
         const userMessage = getUserFriendlyErrorMessage(ErrorTypes.CLUE_LOADING_ERROR)
         showToast.error(userMessage)
@@ -237,7 +226,7 @@ function PlayGame() {
     }
   }, [gameId, currentClueNumber, location])
 
-  const requestLocation = useCallback(() => {
+  const requestLocation = useCallback(async () => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -247,12 +236,15 @@ function PlayGame() {
           })
           console.log('Location obtained successfully:', position.coords.latitude, position.coords.longitude)
         },
-        (error) => {
+        async (error) => {
           // Use enhanced error handling
           const errorDetails = handleGeolocationError(error, gameId, localStorage.getItem('userId') || undefined)
           const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
 
           console.error('Geolocation error details:', errorDetails)
+          
+          // Log the error using the proper utility
+          await logError(errorDetails)
 
           // For development/testing, set a default location (Calabar, Nigeria)
           if (process.env.NODE_ENV === 'development') {
@@ -284,20 +276,8 @@ function PlayGame() {
         userId: localStorage.getItem('userId') || undefined
       }
 
-      // Log the error
-      fetch('/api/activities', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-        },
-        body: JSON.stringify({
-          type: 'ERROR_OCCURRED',
-          description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
-          details: errorDetails,
-          userId: localStorage.getItem('userId') || 'anonymous'
-        })
-      }).catch(logError => console.error('Failed to log geolocation error:', logError))
+      // Log the error using the proper utility
+      await logError(errorDetails)
 
       const userMessage = getUserFriendlyErrorMessage(ErrorTypes.GEOLOCATION_NOT_SUPPORTED)
 
@@ -320,17 +300,17 @@ function PlayGame() {
     if (!showPirateMap && !currentClue && loading && !gameError) {
       console.log('Pirate map completed, fetching clue data...')
       let isMounted = true // Prevent state updates if component unmounts
-      
+
       const fetchData = async () => {
         try {
           // First fetch user's progress to get current clue number
           const progressClueNumber = await fetchProgress()
           if (!isMounted) return
-          
+
           // Then fetch the current clue based on progress
           await fetchCurrentClue(progressClueNumber)
           if (!isMounted) return
-          
+
           requestLocation()
         } catch (error) {
           console.error('Error during initial game load:', error)
@@ -342,9 +322,9 @@ function PlayGame() {
           }
         }
       }
-      
+
       fetchData()
-      
+
       return () => {
         isMounted = false
       }
@@ -398,19 +378,8 @@ function PlayGame() {
         }
       }
 
-      fetch('/api/activities', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-        },
-        body: JSON.stringify({
-          type: 'ERROR_OCCURRED',
-          description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
-          details: errorDetails,
-          userId: localStorage.getItem('userId') || 'anonymous'
-        })
-      }).catch(logError => console.error('Failed to log validation error:', logError))
+      // Log the error using the proper utility
+      await logError(errorDetails)
 
       showToast.error(errorMessage)
       return
@@ -533,19 +502,8 @@ function PlayGame() {
           }
         }
 
-        fetch('/api/activities', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token || ''}`
-          },
-          body: JSON.stringify({
-            type: 'ERROR_OCCURRED',
-            description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
-            details: errorDetails,
-            userId: userId || 'anonymous'
-          })
-        }).catch(logError => console.error('Failed to log submission error:', logError))
+        // Log the error using the proper utility
+        await logError(errorDetails)
 
         showToast.error('Unexpected response format. Please try again.')
       }
