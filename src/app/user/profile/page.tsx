@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
+import { showToast } from '@/lib/toast'
+import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 interface UserData {
   id: string
@@ -171,13 +172,13 @@ export default function ProfilePage() {
           newPassword: '',
           confirmPassword: ''
         }))
-        alert('Profile updated successfully!')
+        showToast.success('Profile updated successfully!')
       } else {
-        alert(data.error || 'Failed to update profile')
+        showToast.error(data.error || 'Failed to update profile')
       }
     } catch (error) {
       console.error('Error updating profile:', error)
-      alert('Error updating profile')
+      showToast.error('Error updating profile')
     } finally {
       setSaving(false)
     }
@@ -253,7 +254,7 @@ export default function ProfilePage() {
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900">{user?.username}</h3>
                 <p className="text-gray-600">{user?.email}</p>
-                
+
                 <div className="flex justify-center space-x-2 mt-4">
                   <span className={getRoleBadge(user?.role || 'USER')}>
                     {user?.role}
@@ -265,7 +266,7 @@ export default function ProfilePage() {
                     VERIFIED
                   </span>
                 </div>
-                
+
                 <div className="mt-4 text-sm text-gray-500">
                   Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
                 </div>
@@ -280,7 +281,7 @@ export default function ProfilePage() {
                 </div>
                 <h3 className="text-xl font-semibold text-gray-900">SuperAdmin</h3>
                 <p className="text-gray-600">admin@xmpcommerce.com</p>
-                
+
                 <div className="flex justify-center space-x-2 mt-4">
                   <span className="px-3 py-1 text-sm font-medium rounded-full bg-purple-100 text-purple-800">
                     SUPERADMIN
@@ -289,7 +290,7 @@ export default function ProfilePage() {
                     ACTIVE
                   </span>
                 </div>
-                
+
                 <div className="mt-4 text-sm text-gray-500">
                   Member since January 1, 2025
                 </div>

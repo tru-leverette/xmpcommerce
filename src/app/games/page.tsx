@@ -1,5 +1,6 @@
 'use client'
 
+import { showToast } from '@/lib/toast'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
@@ -109,7 +110,7 @@ function Games() {
       const data = await response.json()
 
       if (response.ok) {
-        alert('Successfully registered for the game!')
+        showToast.success('Successfully registered for the game!')
         // Update the local state to show registration status
         setGames(prevGames =>
           prevGames.map(game =>
@@ -119,11 +120,11 @@ function Games() {
           )
         )
       } else {
-        alert(data.error || 'Registration failed')
+        showToast.error(data.error || 'Registration failed')
       }
     } catch (error) {
       console.error('Error registering for game:', error)
-      alert('Error registering for game')
+      showToast.error('Error registering for game')
     } finally {
       setRegistering(null)
     }

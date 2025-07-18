@@ -9,6 +9,7 @@ import {
   handleGeolocationError,
   handleNetworkError
 } from '@/lib/errorHandling'
+import { showToast } from '@/lib/toast'
 import { useParams } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -161,7 +162,7 @@ function PlayGame() {
 
         const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
         console.error('Clue API error details:', errorDetails)
-        alert(`Error loading clue: ${userMessage}`)
+        showToast.error(`Error loading clue: ${userMessage}`)
         return
       }
 
@@ -209,7 +210,7 @@ function PlayGame() {
         }).catch(logError => console.error('Failed to log clue loading error:', logError))
 
         const userMessage = getUserFriendlyErrorMessage(ErrorTypes.CLUE_LOADING_ERROR)
-        alert(userMessage)
+        showToast.error(userMessage)
       }
     } catch (error) {
       // Enhanced network error handling
@@ -221,7 +222,7 @@ function PlayGame() {
 
       console.error('Network error fetching clue:', errorDetails)
       const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
-      alert(`Network error: ${userMessage}`)
+      showToast.error(`Network error: ${userMessage}`)
     } finally {
       console.log('Setting loading to false')
       setLoading(false)
@@ -291,9 +292,9 @@ function PlayGame() {
               lat: 4.9518,
               lng: 8.3229
             })
-            alert(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
+            showToast.warning(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
           } else {
-            alert(userMessage)
+            showToast.error(userMessage)
           }
         },
         {
@@ -342,9 +343,9 @@ function PlayGame() {
           lat: 4.9518,
           lng: 8.3229
         })
-        alert(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
+        showToast.warning(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
       } else {
-        alert(userMessage)
+        showToast.error(userMessage)
       }
     }
   }
@@ -387,7 +388,7 @@ function PlayGame() {
         })
       }).catch(logError => console.error('Failed to log validation error:', logError))
 
-      alert(errorMessage)
+      showToast.error(errorMessage)
       return
     }
 
@@ -411,7 +412,7 @@ function PlayGame() {
       // Validate submission based on clue type
       if (currentClue.type === 'TEXT_ANSWER' || currentClue.type === 'COMBINED') {
         if (!textAnswer.trim()) {
-          alert('Please enter an answer')
+          showToast.warning('Please enter an answer')
           setSubmitting(false)
           return
         }
@@ -421,7 +422,7 @@ function PlayGame() {
 
       if (currentClue.type === 'PHOTO_UPLOAD' || currentClue.type === 'COMBINED') {
         if (!selectedFile) {
-          alert('Please select a photo')
+          showToast.warning('Please select a photo')
           setSubmitting(false)
           return
         }
@@ -451,7 +452,7 @@ function PlayGame() {
 
         const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
         console.error('Submission API error details:', errorDetails)
-        alert(`Error submitting answer: ${userMessage}`)
+        showToast.error(`Error submitting answer: ${userMessage}`)
         return
       }
 
@@ -480,7 +481,7 @@ function PlayGame() {
             setGameComplete(true)
             // Show completion message
             setTimeout(() => {
-              alert('🎉 Congratulations! You\'ve completed this stage! Well done, treasure hunter!')
+              showToast.success('🎉 Congratulations! You\'ve completed this stage! Well done, treasure hunter!')
             }, 1000)
           } else if (data.nextClueNumber) {
             // Move to next clue after a delay
@@ -522,7 +523,7 @@ function PlayGame() {
           })
         }).catch(logError => console.error('Failed to log submission error:', logError))
 
-        alert('Unexpected response format. Please try again.')
+        showToast.error('Unexpected response format. Please try again.')
       }
     } catch (error) {
       // Enhanced network error handling
@@ -534,7 +535,7 @@ function PlayGame() {
 
       console.error('Network error submitting answer:', errorDetails)
       const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
-      alert(`Network error: ${userMessage}`)
+      showToast.error(`Network error: ${userMessage}`)
     } finally {
       setSubmitting(false)
     }
