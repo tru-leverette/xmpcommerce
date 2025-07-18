@@ -78,7 +78,7 @@ function PlayGame() {
         return 1 // Default to first clue
       }
     } catch (error) {
-      const errorDetails = handleNetworkError(error as Error, {
+      const errorDetails = await handleNetworkError(error as Error, {
         operation: 'fetch_progress',
         gameId,
         userId: localStorage.getItem('userId') || undefined
@@ -125,7 +125,7 @@ function PlayGame() {
       console.log('Progress updated successfully:', data)
       return data
     } catch (error) {
-      const errorDetails = handleNetworkError(error as Error, {
+      const errorDetails = await handleNetworkError(error as Error, {
         operation: 'update_progress',
         gameId,
         userId: localStorage.getItem('userId') || undefined
@@ -208,7 +208,7 @@ function PlayGame() {
       }
     } catch (error) {
       // Enhanced network error handling
-      const errorDetails = handleNetworkError(error as Error, {
+      const errorDetails = await handleNetworkError(error as Error, {
         operation: 'fetch_current_clue',
         gameId,
         userId: localStorage.getItem('userId') || undefined
@@ -238,7 +238,7 @@ function PlayGame() {
         },
         async (error) => {
           // Use enhanced error handling
-          const errorDetails = handleGeolocationError(error, gameId, localStorage.getItem('userId') || undefined)
+          const errorDetails = await handleGeolocationError(error, gameId, localStorage.getItem('userId') || undefined)
           const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
 
           console.error('Geolocation error details:', errorDetails)
@@ -459,7 +459,7 @@ function PlayGame() {
           await updateProgress(currentClueNumber, data.submission.isCorrect, submissionData)
         } catch (progressError) {
           // Log progress update error but don't block user flow
-          const errorDetails = handleNetworkError(progressError as Error, {
+          const errorDetails = await handleNetworkError(progressError as Error, {
             operation: 'update_progress',
             gameId,
             userId: userId || undefined
@@ -509,7 +509,7 @@ function PlayGame() {
       }
     } catch (error) {
       // Enhanced network error handling
-      const errorDetails = handleNetworkError(error as Error, {
+      const errorDetails = await handleNetworkError(error as Error, {
         operation: 'submit_answer',
         gameId,
         userId: localStorage.getItem('userId') || undefined
