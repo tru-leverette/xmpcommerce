@@ -242,7 +242,7 @@ function PlayGame() {
           const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
 
           console.error('Geolocation error details:', errorDetails)
-          
+
           // Log the error using the proper utility
           await logError(errorDetails)
 
