@@ -44,6 +44,7 @@ function PlayGame() {
   const [currentClueNumber, setCurrentClueNumber] = useState(1)
   const [totalClues, setTotalClues] = useState(4)
   const [gameComplete, setGameComplete] = useState(false)
+  const [gameError, setGameError] = useState<string | null>(null) // Add error state to prevent recursive calls
 
   // Fetch user's progress from database
   const fetchProgress = useCallback(async () => {
@@ -162,7 +163,11 @@ function PlayGame() {
 
         const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
         console.error('Clue API error details:', errorDetails)
+        
+        // Set error state to prevent recursive calls
+        setGameError(`Error loading clue: ${userMessage}`)
         showToast.error(`Error loading clue: ${userMessage}`)
+        setLoading(false)
         return
       }
 
@@ -222,53 +227,17 @@ function PlayGame() {
 
       console.error('Network error fetching clue:', errorDetails)
       const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
-      showToast.error(`Network error: ${userMessage}`)
+      const errorMessage = `Network error: ${userMessage}`
+      setGameError(errorMessage)
+      showToast.error(errorMessage)
+      setLoading(false)
     } finally {
       console.log('Setting loading to false')
       setLoading(false)
     }
   }, [gameId, currentClueNumber, location])
 
-  useEffect(() => {
-    console.log('UseEffect triggered - showPirateMap:', showPirateMap, 'loading:', loading)
-    // Only fetch data after pirate map animation completes
-    if (!showPirateMap) {
-      console.log('Pirate map completed, fetching clue data...')
-      const fetchData = async () => {
-        // First fetch user's progress to get current clue number
-        const progressClueNumber = await fetchProgress()
-        // Then fetch the current clue based on progress
-        await fetchCurrentClue(progressClueNumber)
-        requestLocation()
-      }
-      fetchData()
-    }
-  }, [fetchCurrentClue, fetchProgress, showPirateMap]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Fallback: if still loading after pirate map is gone for too long, force completion
-  useEffect(() => {
-    if (!showPirateMap && loading) {
-      const fallbackTimer = setTimeout(() => {
-        console.log('Fallback: Force completing loading state')
-        setLoading(false)
-        // Create a default clue if none exists
-        if (!currentClue) {
-          setCurrentClue({
-            id: 'fallback-clue',
-            clueNumber: 1,
-            question: 'Welcome to the hunt! This is a test clue. What sound does a lion make?',
-            hint: 'Think about the king of the jungle',
-            type: 'TEXT_ANSWER',
-            huntId: 'test-hunt'
-          })
-        }
-      }, 5000) // Wait 5 seconds max
-
-      return () => clearTimeout(fallbackTimer)
-    }
-  }, [showPirateMap, loading, currentClue])
-
-  const requestLocation = () => {
+  const requestLocation = useCallback(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -309,14 +278,10 @@ function PlayGame() {
       // Enhanced error handling for unsupported browsers
       const errorDetails = {
         errorType: ErrorTypes.GEOLOCATION_NOT_SUPPORTED,
-        errorMessage: 'Browser does not support geolocation API',
+        errorMessage: 'Geolocation is not supported by this browser',
         timestamp: new Date().toISOString(),
         gameId,
-        additionalContext: {
-          userAgent: navigator.userAgent,
-          browserSupportsGeolocation: false,
-          errorOccurredAt: 'game_play_location_request'
-        }
+        userId: localStorage.getItem('userId') || undefined
       }
 
       // Log the error
@@ -336,7 +301,6 @@ function PlayGame() {
 
       const userMessage = getUserFriendlyErrorMessage(ErrorTypes.GEOLOCATION_NOT_SUPPORTED)
 
-      // Fallback for browsers without geolocation
       if (process.env.NODE_ENV === 'development') {
         console.warn('Using default location - geolocation not supported')
         setLocation({
@@ -348,7 +312,67 @@ function PlayGame() {
         showToast.error(userMessage)
       }
     }
-  }
+  }, [gameId])
+
+  useEffect(() => {
+    console.log('UseEffect triggered - showPirateMap:', showPirateMap, 'loading:', loading, 'gameError:', gameError)
+    // Only fetch data after pirate map animation completes and if we don't have a clue yet and no error state
+    if (!showPirateMap && !currentClue && loading && !gameError) {
+      console.log('Pirate map completed, fetching clue data...')
+      let isMounted = true // Prevent state updates if component unmounts
+      
+      const fetchData = async () => {
+        try {
+          // First fetch user's progress to get current clue number
+          const progressClueNumber = await fetchProgress()
+          if (!isMounted) return
+          
+          // Then fetch the current clue based on progress
+          await fetchCurrentClue(progressClueNumber)
+          if (!isMounted) return
+          
+          requestLocation()
+        } catch (error) {
+          console.error('Error during initial game load:', error)
+          if (isMounted) {
+            const errorMessage = 'Failed to load game. This might be because you are not in the correct geographic location for this game. Please try refreshing the page or contact support.'
+            setGameError(errorMessage)
+            showToast.error(errorMessage)
+            setLoading(false)
+          }
+        }
+      }
+      
+      fetchData()
+      
+      return () => {
+        isMounted = false
+      }
+    }
+  }, [showPirateMap, currentClue, loading, gameError, fetchCurrentClue, fetchProgress, requestLocation])
+
+  // Fallback: if still loading after pirate map is gone for too long, force completion
+  useEffect(() => {
+    if (!showPirateMap && loading) {
+      const fallbackTimer = setTimeout(() => {
+        console.log('Fallback: Force completing loading state')
+        setLoading(false)
+        // Create a default clue if none exists
+        if (!currentClue) {
+          setCurrentClue({
+            id: 'fallback-clue',
+            clueNumber: 1,
+            question: 'Welcome to the hunt! This is a test clue. What sound does a lion make?',
+            hint: 'Think about the king of the jungle',
+            type: 'TEXT_ANSWER',
+            huntId: 'test-hunt'
+          })
+        }
+      }, 5000) // Wait 5 seconds max
+
+      return () => clearTimeout(fallbackTimer)
+    }
+  }, [showPirateMap, loading, currentClue])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -589,6 +613,38 @@ function PlayGame() {
                 className="bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700"
               >
                 Return to Dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (gameError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto">
+          <div className="bg-red-100 border border-red-300 rounded-lg p-6 mb-6">
+            <h2 className="text-2xl font-bold text-red-800 mb-4">Game Loading Error</h2>
+            <p className="text-red-700 mb-4">{gameError}</p>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setGameError(null)
+                  setLoading(true)
+                  setShowPirateMap(true)
+                  setCurrentClue(null)
+                }}
+                className="bg-red-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-red-700 w-full"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => window.location.href = '/games'}
+                className="bg-gray-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 w-full"
+              >
+                Back to Games
               </button>
             </div>
           </div>
