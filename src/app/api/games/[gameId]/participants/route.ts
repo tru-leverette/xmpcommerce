@@ -15,9 +15,9 @@ export async function POST(
     const { verifyTokenAndUser, getTokenFromHeader } = await import('@/lib/auth')
     const { gameId } = await params
     const authHeader = request.headers.get('authorization')
-    
+
     console.log('Registering for game:', gameId)
-    
+
     // Authentication check
     const token = getTokenFromHeader(authHeader)
     if (!token) {
@@ -74,16 +74,51 @@ export async function POST(
       )
     }
 
+
+    // Ensure at least one level and stage exist for the game
+    let level = await prisma.level.findFirst({ where: { gameId } });
+    if (!level) {
+      level = await prisma.level.create({
+        data: {
+          gameId,
+          levelNumber: 1,
+          name: 'Level 1',
+          description: 'Auto-created Level 1',
+        },
+      });
+    }
+    let stage = await prisma.stage.findFirst({ where: { levelId: level.id } });
+    if (!stage) {
+      stage = await prisma.stage.create({
+        data: {
+          levelId: level.id,
+          stageNumber: 1,
+          name: 'Stage 1',
+          description: 'Auto-created Stage 1',
+        },
+      });
+    }
+
     // Create participant and wallet
     const participant = await prisma.participant.create({
       data: {
         userId: decoded.userId,
         gameId,
-        pebbles: 1000, // Starting pebbles as per schema default
-        scavengerStones: 0, // Starting stones
+        pebbles: 1000,
+        scavengerStones: 0,
         wallet: {
           create: {
-            balance: 0 // Starting wallet balance
+            balance: 0
+          }
+        },
+        progress: {
+          create: {
+            stageId: stage.id,
+            currentLevel: 1,
+            currentStage: 1,
+            currentHunt: 1,
+            currentClue: 1,
+            phase: 'PHASE_1',
           }
         }
       },
@@ -94,9 +129,10 @@ export async function POST(
             username: true,
             email: true
           }
-        }
+        },
+        progress: true
       }
-    })
+    });
 
     // Log registration activity
     try {
@@ -145,13 +181,13 @@ export async function GET(
     // Lazy load dependencies
     const { prisma } = await import('@/lib/prisma')
     const { verifyTokenAndUser, getTokenFromHeader } = await import('@/lib/auth')
-    
+
     const { gameId } = await params
     const authHeader = request.headers.get('authorization')
-    
+
     console.log('Getting participants for game:', gameId)
     console.log('Auth header:', authHeader)
-    
+
     const token = getTokenFromHeader(authHeader)
     if (!token) {
       return NextResponse.json(
@@ -161,7 +197,7 @@ export async function GET(
     }
 
     const decoded = await verifyTokenAndUser(token)
-    
+
     if (!['ADMIN', 'SUPERADMIN'].includes(decoded.role)) {
       return NextResponse.json(
         { error: 'Insufficient permissions' },
