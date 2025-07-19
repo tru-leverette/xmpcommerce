@@ -2,60 +2,82 @@
 "use client";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+
+
 import { useEffect, useState } from "react";
 
+interface Clue {
+    id: string;
+    clueNumber: number;
+    question: string;
+    hint?: string | null;
+    type: 'TEXT_ANSWER' | 'PHOTO_UPLOAD' | 'COMBINED';
+    huntId: string;
+}
 
-type Game = {
+interface ClueSet {
+    id: string;
+    name: string;
+    description?: string | null;
+    center: { lat: number; lng: number };
+    radius: string;
+    distance: string;
+    created: boolean;
+}
+
+interface Progress {
+    currentLevel?: number;
+    currentStage?: number;
+    currentHunt?: string;
+    currentClue?: string;
+    currentClueNumber?: number;
+    isStageCompleted?: boolean;
+    isLevelCompleted?: boolean;
+    isGameComplete?: boolean;
+    stagesCompletedInLevel?: number;
+    canAdvanceToNextStage?: boolean;
+    canAdvanceToNextLevel?: boolean;
+    scavengerStones?: number;
+    lastLocation?: string | { lat: number; lng: number };
+    completedClues?: unknown[];
+    completedHunts?: unknown[];
+    completedStages?: unknown[];
+    completedLevels?: unknown[];
+    badges?: unknown[];
+    totalClues?: number;
+    totalLevels?: number;
+    totalStagesPerLevel?: number;
+    totalCluesPerStage?: number;
+    startedAt?: string;
+    lastPlayedAt?: string;
+    completedAt?: string;
+}
+
+interface Game {
     id: string;
     location: string;
     phase?: string;
     centerLatitude?: number;
     centerLongitude?: number;
     // Add other properties as needed
-};
+}
 
 export default function GameAccess() {
     const params = useParams();
     const gameId = params.gameId as string;
-    const [userName, setUserName] = useState("");
-    const [gameLocation, setGameLocation] = useState("");
+    const [userName, setUserName] = useState<string>("");
+    const [gameLocation, setGameLocation] = useState<string>("");
     const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [gameCoords, setGameCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [gamePhase, setGamePhase] = useState<string | undefined>(undefined);
-    // For rendering only
-    const userContinentText = coords ? getContinent(coords.lat, coords.lng) : "(not available)";
-    // Modal state
-    const [showModal, setShowModal] = useState(false);
-    // Progress type
-    type Progress = {
-        currentLevel?: number;
-        currentStage?: number;
-        currentHunt?: string;
-        currentClue?: string;
-        currentClueNumber?: number;
-        isStageCompleted?: boolean;
-        isLevelCompleted?: boolean;
-        isGameComplete?: boolean;
-        stagesCompletedInLevel?: number;
-        canAdvanceToNextStage?: boolean;
-        canAdvanceToNextLevel?: boolean;
-        scavengerStones?: number;
-        lastLocation?: string | { lat: number; lng: number };
-        completedClues?: unknown[];
-        completedHunts?: unknown[];
-        completedStages?: unknown[];
-        completedLevels?: unknown[];
-        badges?: unknown[];
-        totalClues?: number;
-        totalLevels?: number;
-        totalStagesPerLevel?: number;
-        totalCluesPerStage?: number;
-        startedAt?: string;
-        lastPlayedAt?: string;
-        completedAt?: string;
-        [key: string]: unknown;
-    };
+    const [showModal, setShowModal] = useState<boolean>(false);
     const [progress, setProgress] = useState<Progress | null>(null);
+    const [clueSet, setClueSet] = useState<ClueSet | null>(null);
+    // Removed unused clueSetCreated state
+    const [clues, setClues] = useState<Clue[]>([]);
+    const [cluesLoading, setCluesLoading] = useState<boolean>(false);
+    const [cluesError, setCluesError] = useState<string | null>(null);
+    const userContinentText = coords ? getContinent(coords.lat, coords.lng) : "(not available)";
 
     useEffect(() => {
         const fetchData = async () => {
@@ -99,20 +121,69 @@ export default function GameAccess() {
             // Get user coordinates
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(
-                    (pos) => {
+                    async (pos) => {
                         const userLat = pos.coords.latitude;
                         const userLng = pos.coords.longitude;
                         setCoords({ lat: userLat, lng: userLng });
+                        // Fetch clue set for this location
+                        try {
+                            const clueSetRes = await fetch(`/api/games/${gameId}/clue-sets`, {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    Authorization: `Bearer ${token}`
+                                },
+                                body: JSON.stringify({ lat: userLat, lng: userLng, action: "test-assignment" })
+                            });
+                            const clueSetData = await clueSetRes.json();
+                            if (clueSetData.clueSet) {
+                                setClueSet(clueSetData.clueSet);
+                                // Fetch clues for this clueSet and current stage
+                                setCluesLoading(true);
+                                setCluesError(null);
+                                try {
+                                    // Use currentStage from progress if available
+                                    const stageId = progress?.currentStage;
+                                    if (stageId) {
+                                        const cluesRes = await fetch(`/api/games/${gameId}/clues?clueSetId=${clueSetData.clueSet.id}&stageId=${stageId}`, {
+                                            headers: { Authorization: `Bearer ${token}` }
+                                        });
+                                        const cluesData = await cluesRes.json();
+                                        if (cluesRes.ok && Array.isArray(cluesData.clues)) {
+                                            setClues(cluesData.clues);
+                                        } else {
+                                            setClues([]);
+                                            setCluesError(cluesData.error || 'No clues found.');
+                                        }
+                                    } else {
+                                        setClues([]);
+                                        setCluesError('No stage information available.');
+                                    }
+                                } catch {
+                                    setClues([]);
+                                    setCluesError('Failed to fetch clues.');
+                                } finally {
+                                    setCluesLoading(false);
+                                }
+                            } else {
+                                setClueSet(null);
+                                setClues([]);
+                            }
+                        } catch {
+                            setClueSet(null);
+                            setClues([]);
+                        }
                     },
                     () => {
                         setCoords(null);
+                        setClueSet(null);
                     },
                     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
                 );
             }
         };
         fetchData();
-    }, [gameId]);
+    }, [gameId, progress?.currentStage]);
 
     // Show modal if user's continent does not match game location
     useEffect(() => {
@@ -216,6 +287,37 @@ export default function GameAccess() {
                 </div>
             )}
             <div>
+                {clueSet && (
+                    <div style={{ marginBottom: 16, padding: 12, border: '1px solid #e0e0e0', borderRadius: 8, background: '#fafbfc' }}>
+                        <div style={{ fontWeight: 600, fontSize: 18, marginBottom: 4 }}>Clue Set: {clueSet.name}</div>
+                        {clueSet.description && <div style={{ fontSize: 14, color: '#555', marginBottom: 4 }}>{clueSet.description}</div>}
+                        <div style={{ fontSize: 13, color: '#666' }}>
+                            <b>ID:</b> {clueSet.id}<br />
+                            <b>Center:</b> ({clueSet.center.lat}, {clueSet.center.lng})<br />
+                            <b>Radius:</b> {clueSet.radius}<br />
+                            <b>Distance from you:</b> {clueSet.distance}
+                        </div>
+                        <div style={{ fontSize: 12, color: clueSet.created ? '#388e3c' : '#1976d2', marginTop: 4 }}>
+                            {clueSet.created ? 'New clue set created for your location.' : 'Using existing clue set.'}
+                        </div>
+                    </div>
+                )}
+                {cluesLoading && <div>Loading clues...</div>}
+                {cluesError && <div style={{ color: 'red' }}>{cluesError}</div>}
+                {clues.length > 0 && (
+                    <div style={{ marginBottom: 12 }}>
+                        <b>Clues:</b>
+                        <ol style={{ margin: 0, paddingLeft: 20 }}>
+                            {clues.map(clue => (
+                                <li key={clue.id}>
+                                    <b>#{clue.clueNumber}:</b> {clue.question}
+                                    {clue.hint && <div style={{ fontStyle: 'italic', color: '#888' }}>Hint: {clue.hint}</div>}
+                                    <div style={{ fontSize: 12, color: '#666' }}>Type: {clue.type}</div>
+                                </li>
+                            ))}
+                        </ol>
+                    </div>
+                )}
                 {progress && typeof progress === 'object' ? (
                     <div style={{ marginBottom: 12 }}>
                         <b>Progress:</b>

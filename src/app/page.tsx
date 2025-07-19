@@ -15,7 +15,7 @@ export default function Home() {
           </p>
           <div className="flex gap-4 justify-center">
             <Link
-              href="/auth/register"
+              href="/auth/login"
               className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white px-8 py-3 rounded-lg font-semibold hover:from-emerald-700 hover:to-teal-800 transition-all duration-300 transform hover:scale-105 shadow-lg"
             >
               Get Started

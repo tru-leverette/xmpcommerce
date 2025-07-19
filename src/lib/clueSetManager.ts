@@ -1,4 +1,64 @@
-import { prisma } from './prisma'
+/**
+ * Calculate bounding box for a given center point and radius in kilometers
+ */
+export function calculateBoundingBox(center: Location, radiusKm: number): ClueSetBounds {
+    const R = 6371; // Earth's radius in kilometers
+    // Latitude bounds
+    const latOffset = (radiusKm / R) * (180 / Math.PI);
+    const minLat = center.lat - latOffset;
+    const maxLat = center.lat + latOffset;
+    // Longitude bounds (accounting for latitude)
+    const lngOffset = (radiusKm / R) * (180 / Math.PI) / Math.cos(center.lat * Math.PI / 180);
+    const minLng = center.lng - lngOffset;
+    const maxLng = center.lng + lngOffset;
+    return {
+        minLat,
+        maxLat,
+        minLng,
+        maxLng,
+        centerLat: center.lat,
+        centerLng: center.lng
+    };
+}
+/**
+ * Find a different clue set (not the one at the given location)
+ */
+export async function findDifferentClueSet(gameId: string, location: Location): Promise<{ id: string; name: string; description: string | null; centerLatitude: number; centerLongitude: number; radiusKm: number } | null> {
+    const clueSets = await prisma.clueSet.findMany({
+        where: { gameId, isActive: true },
+        select: {
+            id: true,
+            name: true,
+            description: true,
+            centerLatitude: true,
+            centerLongitude: true,
+            radiusKm: true
+        }
+    });
+    for (const clueSet of clueSets) {
+        // If the center is more than 0.5 miles away, consider it different
+        const dist = calculateDistance(location, { lat: clueSet.centerLatitude, lng: clueSet.centerLongitude });
+        if (dist > 0.8) return clueSet;
+    }
+    return null;
+}
+
+/**
+ * Find a different group's clue set (placeholder: just finds a different clue set for now)
+ */
+export async function findDifferentGroupClueSet(gameId: string, location: Location): Promise<{ id: string; name: string; description: string | null; centerLatitude: number; centerLongitude: number; radiusKm: number } | null> {
+    // For now, just call findDifferentClueSet (group logic not implemented)
+    return findDifferentClueSet(gameId, location);
+}
+
+
+/**
+ * Fetch participant progress from the database
+ */
+
+
+import { ClueGenerationParams, generateClues, GeneratedClue } from './openaiClueGenerator';
+import { prisma } from './prisma';
 
 export interface Location {
     lat: number
@@ -35,38 +95,80 @@ export function calculateDistance(point1: Location, point2: Location): number {
  * Convert degrees to radians
  */
 function toRadians(degrees: number): number {
-    return degrees * (Math.PI / 180)
+    return degrees * (Math.PI / 180);
 }
 
+export type CreateClueSetOptions = {
+    gameId: string;
+    location: Location;
+    name: string;
+    description?: string;
+    phase?: string;
+    level?: number;
+    stage?: number;
+    cluesCount?: number;
+    stageId: string;
+};
+
+// ...existing code...
+
 /**
- * Calculate bounding box for a given center point and radius in kilometers
+ * Assign a participant to the appropriate clue set based on their location
  */
-export function calculateBoundingBox(center: Location, radiusKm: number): ClueSetBounds {
-    const R = 6371 // Earth's radius in kilometers
+export async function assignParticipantToClueSet(
+    participantId: string,
+    gameId: string,
+    location: Location
+) {
+    // Get participant progress (latest)
+    const progress = await prisma.participantProgress.findFirst({
+        where: { participantId },
+        orderBy: { createdAt: 'desc' },
+        select: { currentLevel: true, currentStage: true, stageId: true }
+    });
+    if (!progress) throw new Error('Participant progress not found');
+    const level = progress.currentLevel;
+    const stage = progress.currentStage;
+    const stageId = progress.stageId;
 
-    // Calculate latitude bounds
-    const latOffset = (radiusKm / R) * (180 / Math.PI)
-    const minLat = center.lat - latOffset
-    const maxLat = center.lat + latOffset
+    let clueSet: { id: string; name: string; description: string | null; centerLatitude: number; centerLongitude: number; radiusKm: number } | null = null;
 
-    // Calculate longitude bounds (accounting for latitude)
-    const lngOffset = (radiusKm / R) * (180 / Math.PI) / Math.cos(toRadians(center.lat))
-    const minLng = center.lng - lngOffset
-    const maxLng = center.lng + lngOffset
-
-    return {
-        minLat,
-        maxLat,
-        minLng,
-        maxLng,
-        centerLat: center.lat,
-        centerLng: center.lng
+    if (level === 3 && (stage === 3 || stage === 4)) {
+        clueSet = await findDifferentClueSet(gameId, location);
+    } else if (level === 6 && (stage === 3 || stage === 4)) {
+        clueSet = await findDifferentGroupClueSet(gameId, location);
+    } else {
+        clueSet = await findExistingClueSet(gameId, location);
+        if (!clueSet) {
+            const locationName = `ClueSet-${Math.round(location.lat * 1000)}-${Math.round(location.lng * 1000)}`;
+            clueSet = await createClueSet({
+                gameId,
+                location,
+                name: locationName,
+                description: `Auto-generated clue set for location ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`,
+                phase: 'PHASE_1',
+                level,
+                stage,
+                cluesCount: 4,
+                stageId
+            });
+        }
     }
-}
 
-/**
- * Check if a point is within a clue set's radius
- */
+    // Update participant with clue set assignment
+    if (clueSet) {
+        await prisma.participant.update({
+            where: { id: participantId },
+            data: {
+                clueSetId: clueSet.id,
+                currentLatitude: location.lat,
+                currentLongitude: location.lng,
+                lastLocationUpdate: new Date()
+            }
+        });
+    }
+    return clueSet;
+}
 export function isPointInClueSet(point: Location, clueSet: {
     centerLatitude: number
     centerLongitude: number
@@ -180,71 +282,39 @@ export async function findOptimalClueSetPosition(
     }
 
     if (!hasOverlap) {
-        return desiredLocation
+        return desiredLocation;
     }
-
-    // Find alternative position by moving away from overlapping areas
-    // Try positions in a spiral pattern around the desired location
-    const searchRadiusKm = radiusKm * 2.2 // Start search beyond the radius
-    const maxAttempts = 16
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        const angle = (attempt * 45) * (Math.PI / 180) // 45-degree increments
-        const searchRadius = searchRadiusKm + (attempt * radiusKm * 0.5)
-
-        // Calculate new position
-        const offsetLat = (searchRadius / 6371) * (180 / Math.PI) * Math.cos(angle)
-        const offsetLng = (searchRadius / 6371) * (180 / Math.PI) * Math.sin(angle) /
-            Math.cos(toRadians(desiredLocation.lat))
-
-        const candidateLocation = {
-            lat: desiredLocation.lat + offsetLat,
-            lng: desiredLocation.lng + offsetLng
-        }
-
-        // Check if this candidate position works
-        const candidateBounds = calculateBoundingBox(candidateLocation, radiusKm)
-        let candidateHasOverlap = false
-
-        for (const existing of existingClueSets) {
-            const existingBounds = calculateBoundingBox(
-                { lat: existing.centerLatitude, lng: existing.centerLongitude },
-                existing.radiusKm
-            )
-
-            if (cluesetsOverlap(candidateBounds, existingBounds, radiusKm)) {
-                candidateHasOverlap = true
-                break
-            }
-        }
-
-        if (!candidateHasOverlap) {
-            return candidateLocation
-        }
-    }
-
-    // If we couldn't find a good position, return desired location anyway
-    // This should be rare in real-world scenarios
-    console.warn('Could not find optimal clue set position, using desired location')
-    return desiredLocation
+    console.warn('Could not find optimal clue set position, using desired location');
+    return desiredLocation;
 }
 
 /**
- * Create a new clue set for a given location
+ * Create a new clue set for a given location using options object
  */
-export async function createClueSet(
-    gameId: string,
-    location: Location,
-    name: string,
-    description?: string
-) {
-    const radiusKm = 16.09344 // 10 miles in kilometers
+export async function createClueSet(options: CreateClueSetOptions) {
+    const gameId: string = options.gameId;
+    const location: Location = options.location;
+    const name: string = options.name;
+    const description: string = options.description ?? '';
+    const phase: string = options.phase ?? 'PHASE_1';
+    const level: number = options.level ?? 1;
+    const stage: number = options.stage ?? 1;
+    const cluesCount: number = options.cluesCount ?? 4;
+    const stageId: string = options.stageId;
+
+    // Determine radius based on level/group
+    let radiusKm: number = 16.09344; // default 10 miles
+    if (level === 1 || level === 2) {
+        radiusKm = 4.82803; // 3 miles in km
+    } else if (level === 4 || level === 5) {
+        radiusKm = 16.09344; // 10 miles in km (group clue sets)
+    }
 
     // Find optimal position that doesn't overlap
-    const optimalLocation = await findOptimalClueSetPosition(gameId, location, radiusKm)
+    const optimalLocation = await findOptimalClueSetPosition(gameId, location, radiusKm);
 
     // Calculate bounding box
-    const bounds = calculateBoundingBox(optimalLocation, radiusKm)
+    const bounds = calculateBoundingBox(optimalLocation, radiusKm);
 
     // Create the clue set
     const clueSet = await prisma.clueSet.create({
@@ -260,69 +330,138 @@ export async function createClueSet(
             minLongitude: bounds.minLng,
             maxLongitude: bounds.maxLng
         }
-    })
+    });
 
-    return clueSet
+    // Generate clues using OpenAI
+    const params: ClueGenerationParams = {
+        locationName: name,
+        center: { lat: optimalLocation.lat, lng: optimalLocation.lng },
+        radiusKm,
+        phase,
+        level,
+        stage,
+        difficulty: level <= 3 ? 'easy' : level <= 6 ? 'medium' : 'hard',
+        cluesCount
+    };
+    const generatedClues: GeneratedClue[] = await generateClues(params);
+
+    // Find the next hunt number for this stage
+    const existingHunts = await prisma.hunt.findMany({
+        where: { stageId },
+        select: { huntNumber: true },
+        orderBy: { huntNumber: 'desc' },
+        take: 1
+    });
+    const nextHuntNumber = existingHunts.length > 0 ? (existingHunts[0].huntNumber ?? 0) + 1 : 1;
+
+    // Create a hunt for this clue set and stage
+    const hunt = await prisma.hunt.create({
+        data: {
+            name: `${name} Hunt`,
+            description: `Hunt for ${name} (Level ${level}, Stage ${stage})`,
+            clueSetId: clueSet.id,
+            stageId: stageId,
+            huntNumber: nextHuntNumber
+        }
+    });
+
+    // Store generated clues
+    for (let i = 0; i < generatedClues.length; i++) {
+        await prisma.clue.create({
+            data: {
+                clueNumber: i + 1,
+                question: generatedClues[i].clue,
+                type: generatedClues[i].type,
+                huntId: hunt.id
+            }
+        });
+    }
+
+    return clueSet;
 }
 
 /**
  * Assign a participant to the appropriate clue set based on their location
  */
-export async function assignParticipantToClueSet(
-    participantId: string,
-    gameId: string,
-    location: Location
-) {
-    // First try to find existing clue set
-    let clueSet = await findExistingClueSet(gameId, location)
-
-    if (!clueSet) {
-        // Create new clue set
-        const locationName = `ClueSet-${Math.round(location.lat * 1000)}-${Math.round(location.lng * 1000)}`
-        clueSet = await createClueSet(
-            gameId,
-            location,
-            locationName,
-            `Auto-generated clue set for location ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`
-        )
-    }
-
-    // Update participant with clue set assignment
-    await prisma.participant.update({
-        where: { id: participantId },
-        data: {
-            clueSetId: clueSet.id,
-            currentLatitude: location.lat,
-            currentLongitude: location.lng,
-            lastLocationUpdate: new Date()
-        }
-    })
-
-    return clueSet
-}
 
 /**
  * Get or create clues for a clue set
  */
+
 export async function getCluesForClueSet(clueSetId: string, stageId: string) {
     // Check if hunts already exist for this clue set and stage
     const existingHunts = await prisma.hunt.findMany({
         where: {
-            clueSetId,
-            stageId
+            clueSetId: clueSetId,
+            stageId: stageId
         },
         include: {
             clues: {
                 orderBy: { clueNumber: 'asc' }
             }
         }
-    })
+    });
 
     if (existingHunts.length > 0) {
-        return existingHunts
+        return existingHunts;
     }
 
-    // If no hunts exist, we need to generate them
-    // For now, return empty array - in a real implementation, you'd call your AI service here
-    return []
+    // If no hunts exist, auto-generate clues and create hunt
+    const clueSet = await prisma.clueSet.findUnique({ where: { id: clueSetId } });
+    const stage = await prisma.stage.findUnique({ where: { id: stageId }, include: { level: true } });
+    if (!clueSet || !stage || !stage.level) {
+        throw new Error('ClueSet, Stage, or Level not found');
+    }
+    const params: ClueGenerationParams = {
+        locationName: clueSet.name,
+        center: { lat: clueSet.centerLatitude, lng: clueSet.centerLongitude },
+        radiusKm: clueSet.radiusKm,
+        phase: 'PHASE_1',
+        level: stage.level.levelNumber,
+        stage: stage.stageNumber,
+        difficulty: stage.level.levelNumber <= 3 ? 'easy' : stage.level.levelNumber <= 6 ? 'medium' : 'hard',
+        cluesCount: 4
+    };
+    const generatedClues: GeneratedClue[] = await generateClues(params);
+
+    // Find the next hunt number for this stage
+    const existingHuntNumbers = await prisma.hunt.findMany({
+        where: { stageId },
+        select: { huntNumber: true },
+        orderBy: { huntNumber: 'desc' },
+        take: 1
+    });
+    const nextHuntNumber = existingHuntNumbers.length > 0 ? (existingHuntNumbers[0].huntNumber ?? 0) + 1 : 1;
+
+    // Create a hunt for this clue set and stage
+    const hunt = await prisma.hunt.create({
+        data: {
+            name: `${clueSet.name} Hunt`,
+            description: `Hunt for ${clueSet.name} (Level ${stage.level.levelNumber}, Stage ${stage.stageNumber})`,
+            clueSetId: clueSet.id,
+            stageId: stage.id,
+            huntNumber: nextHuntNumber
+        }
+    });
+
+    // Store generated clues
+    for (let i = 0; i < generatedClues.length; i++) {
+        await prisma.clue.create({
+            data: {
+                clueNumber: i + 1,
+                question: generatedClues[i].clue,
+                type: generatedClues[i].type,
+                huntId: hunt.id
+            }
+        });
+    }
+
+    // Return the newly created hunt with clues
+    const newHunt = await prisma.hunt.findUnique({
+        where: { id: hunt.id },
+        include: {
+            clues: { orderBy: { clueNumber: 'asc' } }
+        }
+    });
+    return newHunt ? [newHunt] : [];
 }
