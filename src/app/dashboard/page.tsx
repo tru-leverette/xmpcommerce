@@ -19,9 +19,10 @@ interface GameParticipation {
     title: string
     description: string
     status: string
+    phase?: string
   }
   status: string
-  pebbles: number
+  scavengerStones: number
   joinedAt: string
   progress: {
     currentLevel: number
@@ -45,7 +46,7 @@ export default function UserDashboard() {
   const [participations, setParticipations] = useState<GameParticipation[]>([])
   const [badges, setBadges] = useState<Badge[]>([])
   const [loading, setLoading] = useState(true)
-  const [totalPebbles, setTotalPebbles] = useState(0)
+  const [totalScavengerStones, setTotalScavengerStones] = useState(0)
 
   useEffect(() => {
     // Skip if already fetching or already loaded
@@ -59,11 +60,11 @@ export default function UserDashboard() {
 
     if (cachedData) {
       try {
-        const { user, participations, badges, totalPebbles } = JSON.parse(cachedData)
+        const { user, participations, badges, totalScavengerStones } = JSON.parse(cachedData)
         setUser(user)
         setParticipations(participations)
         setBadges(badges)
-        setTotalPebbles(totalPebbles)
+        setTotalScavengerStones(totalScavengerStones)
         setLoading(false)
         return
       } catch {
@@ -119,16 +120,16 @@ export default function UserDashboard() {
 
         let participationsData: GameParticipation[] = []
         let badgesData: Badge[] = []
-        let totalPebblesCount = 0
+        let totalScavengerStonesCount = 0
 
         if (participationsResponse.ok) {
           const participationsResult = await participationsResponse.json()
           participationsData = participationsResult.participations || []
           setParticipations(participationsData)
 
-          // Calculate total pebbles
-          totalPebblesCount = participationsData.reduce((sum: number, p: GameParticipation) => sum + p.pebbles, 0)
-          setTotalPebbles(totalPebblesCount)
+          // Calculate total scavenger stones
+          totalScavengerStonesCount = participationsData.reduce((sum: number, p: GameParticipation) => sum + p.scavengerStones, 0)
+          setTotalScavengerStones(totalScavengerStonesCount)
         }
 
         if (badgesResponse.ok) {
@@ -143,7 +144,7 @@ export default function UserDashboard() {
             user: userData,
             participations: participationsData,
             badges: badgesData,
-            totalPebbles: totalPebblesCount
+            totalScavengerStones: totalScavengerStonesCount
           }))
         }
 
@@ -194,8 +195,8 @@ export default function UserDashboard() {
                   </div>
                 </div>
                 <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Total Pebbles</p>
-                  <p className="text-2xl font-semibold text-gray-900">{totalPebbles}</p>
+                  <p className="text-sm font-medium text-gray-600">Total Scavenger Stones</p>
+                  <p className="text-2xl font-semibold text-gray-900">{totalScavengerStones}</p>
                 </div>
               </div>
             </div>
@@ -269,7 +270,14 @@ export default function UserDashboard() {
                     {participations.slice(0, 3).map((participation) => (
                       <div key={participation.id} className="border border-gray-200 rounded-lg p-4">
                         <div className="flex justify-between items-start mb-2">
-                          <h3 className="font-semibold text-gray-900">{participation.game.title}</h3>
+                          <h3 className="font-semibold text-gray-900">
+                            {participation.game.title}
+                            {participation.game.phase && (
+                              <span className="ml-2 text-xs text-blue-600 font-semibold">
+                                {participation.game.phase.replace('PHASE_', 'Phase ')}
+                              </span>
+                            )}
+                          </h3>
                           <span className={`px-2 py-1 text-xs rounded-full ${participation.status === 'ACTIVE'
                             ? 'bg-green-100 text-green-800'
                             : 'bg-gray-100 text-gray-800'
@@ -280,13 +288,13 @@ export default function UserDashboard() {
                         <p className="text-gray-600 text-sm mb-3">{participation.game.description}</p>
                         <div className="flex justify-between items-center">
                           <div className="flex items-center space-x-4 text-sm text-gray-500">
-                            <span>💎 {participation.pebbles} pebbles</span>
+                            <span>🪨 {participation.scavengerStones} scavenger stones</span>
                             {participation.progress.length > 0 && (
                               <span>Level {participation.progress[0].currentLevel} Stage {participation.progress[0].currentStage} Clue {participation.progress[0].currentClue}</span>
                             )}
                           </div>
                           <Link
-                            href={`/games/${participation.game.id}/play`}
+                            href={`/games/${participation.game.id}/access`}
                             className="text-blue-600 hover:text-blue-500 text-sm font-medium"
                           >
                             Continue →

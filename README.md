@@ -8,7 +8,7 @@ A comprehensive location-based scavenger hunt gaming platform with AI-powered cl
 - **Location-Based Gameplay**: GPS-powered hunts that adapt to user location
 - **AI-Powered Clues**: Intelligent clue generation based on game theme and location
 - **Progressive Levels**: 12 levels, each with 4 stages containing 4-5 hunts with multiple clues
-- **Pebble Economy**: Earn and spend pebbles to access new stages and levels
+- **Scavenger Stone Economy**: Earn and spend scavenger stones to access new stages and levels
 - **Multiple Submission Types**: Text answers, photo uploads, or combined challenges
 
 ### User Management
@@ -25,7 +25,7 @@ A comprehensive location-based scavenger hunt gaming platform with AI-powered cl
 
 ### Progress Tracking
 - **Badge System**: Earn badges for completing stages and levels
-- **Wallet System**: Track pebble balance and transaction history
+- **Wallet System**: Track scavenger stone balance and transaction history
 - **Progress Monitoring**: Track current level, stage, hunt, and clue progress
 - **Completion Analytics**: Monitor user progress and engagement
 

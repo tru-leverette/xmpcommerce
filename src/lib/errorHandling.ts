@@ -117,6 +117,7 @@ export const ERROR_MESSAGES = {
 export async function logError(errorDetails: ErrorDetails): Promise<void> {
     try {
         const token = localStorage.getItem('token')
+        const userId = localStorage.getItem('userId')
 
         // Enhanced error details
         const fullErrorDetails = {
@@ -130,7 +131,7 @@ export async function logError(errorDetails: ErrorDetails): Promise<void> {
         }
 
         // Log to server for activity tracking
-        await fetch('/api/activities', {
+        const response = await fetch('/api/activities', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -139,24 +140,34 @@ export async function logError(errorDetails: ErrorDetails): Promise<void> {
             body: JSON.stringify({
                 type: 'ERROR_OCCURRED',
                 description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
-                details: fullErrorDetails
+                details: fullErrorDetails,
+                userId: userId || 'anonymous'
             })
         })
+
+        if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`Activity logging failed: ${response.status} ${response.statusText} - ${errorText}`)
+        }
+
+        const result = await response.json()
+        console.log('Error logged successfully:', result)
 
         // Also log to console for development
         console.error('Error logged:', fullErrorDetails)
 
     } catch (logError) {
         console.error('Failed to log error to server:', logError)
+        console.error('Original error details:', errorDetails)
     }
 }
 
 // Enhanced geolocation error handler
-export function handleGeolocationError(
+export async function handleGeolocationError(
     error: GeolocationPositionError,
     gameId: string,
     userId?: string
-): GeolocationErrorDetails {
+): Promise<GeolocationErrorDetails> {
 
     let errorType: ErrorTypes
     let errorCode: number
@@ -197,7 +208,7 @@ export function handleGeolocationError(
     }
 
     // Log the error
-    logError(errorDetails)
+    await logError(errorDetails)
 
     return errorDetails
 }
@@ -256,7 +267,7 @@ export async function handleApiError(
     }
 
     // Log the error
-    logError(errorDetails)
+    await logError(errorDetails)
 
     return errorDetails
 }
@@ -267,14 +278,14 @@ export function getUserFriendlyErrorMessage(errorType: ErrorTypes): string {
 }
 
 // Enhanced network error handler
-export function handleNetworkError(
+export async function handleNetworkError(
     error: Error,
     context: {
         operation: string
         gameId?: string
         userId?: string
     }
-): ErrorDetails {
+): Promise<ErrorDetails> {
 
     const errorDetails: ErrorDetails = {
         errorType: ErrorTypes.API_NETWORK_ERROR,
@@ -292,7 +303,7 @@ export function handleNetworkError(
     }
 
     // Log the error
-    logError(errorDetails)
+    await logError(errorDetails)
 
     return errorDetails
 }

@@ -7,10 +7,11 @@ import {
   getUserFriendlyErrorMessage,
   handleApiError,
   handleGeolocationError,
-  handleNetworkError
+  handleNetworkError,
+  logError
 } from '@/lib/errorHandling'
 import { showToast } from '@/lib/toast'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
 interface Clue {
@@ -31,6 +32,7 @@ interface Submission {
 
 function PlayGame() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const gameId = params.gameId as string
 
   const [showPirateMap, setShowPirateMap] = useState(true)
@@ -44,6 +46,55 @@ function PlayGame() {
   const [currentClueNumber, setCurrentClueNumber] = useState(1)
   const [totalClues, setTotalClues] = useState(4)
   const [gameComplete, setGameComplete] = useState(false)
+  const [gameError, setGameError] = useState<string | null>(null) // Add error state to prevent recursive calls
+
+  // Initialize location from URL parameters or capture fresh location
+  useEffect(() => {
+    const initializeLocation = async () => {
+      // First check if location was passed in URL parameters
+      const urlLat = searchParams.get('lat')
+      const urlLng = searchParams.get('lng')
+
+      if (urlLat && urlLng) {
+        const lat = parseFloat(urlLat)
+        const lng = parseFloat(urlLng)
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+          console.log(`Location from URL: ${lat}, ${lng}`)
+          setLocation({ lat, lng })
+          return
+        }
+      }
+
+      // If no valid location in URL, try to capture fresh location
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+              resolve,
+              reject,
+              {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000 // Cache for 1 minute
+              }
+            )
+          })
+
+          const { latitude, longitude } = position.coords
+          console.log(`Fresh location captured: ${latitude}, ${longitude}`)
+          setLocation({ lat: latitude, lng: longitude })
+
+        } catch (error) {
+          console.error('Error capturing fresh location:', error)
+          // Don't show error toast here as it might be called during initial load
+          // The API will handle the missing location scenario
+        }
+      }
+    }
+
+    initializeLocation()
+  }, [searchParams])
 
   // Fetch user's progress from database
   const fetchProgress = useCallback(async () => {
@@ -76,7 +127,7 @@ function PlayGame() {
         return 1 // Default to first clue
       }
     } catch (error) {
-      const errorDetails = handleNetworkError(error as Error, {
+      const errorDetails = await handleNetworkError(error as Error, {
         operation: 'fetch_progress',
         gameId,
         userId: localStorage.getItem('userId') || undefined
@@ -123,7 +174,7 @@ function PlayGame() {
       console.log('Progress updated successfully:', data)
       return data
     } catch (error) {
-      const errorDetails = handleNetworkError(error as Error, {
+      const errorDetails = await handleNetworkError(error as Error, {
         operation: 'update_progress',
         gameId,
         userId: localStorage.getItem('userId') || undefined
@@ -162,12 +213,46 @@ function PlayGame() {
 
         const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
         console.error('Clue API error details:', errorDetails)
+
+        // Set error state to prevent recursive calls
+        setGameError(`Error loading clue: ${userMessage}`)
         showToast.error(`Error loading clue: ${userMessage}`)
+        setLoading(false)
         return
       }
 
       const data = await response.json()
       console.log('Clue API response:', data)
+
+      // Handle location required response
+      if (data.isLocationRequired) {
+        const locationMessage = `Location Required: ${data.message}`
+        console.log('Location required:', data)
+        setGameError(locationMessage)
+        showToast.warning(locationMessage)
+        setLoading(false)
+        return
+      }
+
+      // Handle geographic restriction response
+      if (data.isGeographicRestriction) {
+        const restrictionMessage = `Geographic Restriction: ${data.message}`
+        console.log('Geographic restriction detected:', data)
+        setGameError(restrictionMessage)
+        showToast.warning(restrictionMessage)
+        setLoading(false)
+        return
+      }
+
+      // Handle no clues available response
+      if (data.isNoCluesAvailable) {
+        const noCluesMessage = `No Clues Available: ${data.message}`
+        console.log('No clues available:', data)
+        setGameError(noCluesMessage)
+        showToast.info(noCluesMessage)
+        setLoading(false)
+        return
+      }
 
       if (data.clue) {
         setCurrentClue(data.clue)
@@ -194,27 +279,15 @@ function PlayGame() {
           }
         }
 
-        // Log the error
-        fetch('/api/activities', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token || ''}`
-          },
-          body: JSON.stringify({
-            type: 'ERROR_OCCURRED',
-            description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
-            details: errorDetails,
-            userId: userId || 'anonymous'
-          })
-        }).catch(logError => console.error('Failed to log clue loading error:', logError))
+        // Log the error using the proper utility
+        await logError(errorDetails)
 
         const userMessage = getUserFriendlyErrorMessage(ErrorTypes.CLUE_LOADING_ERROR)
         showToast.error(userMessage)
       }
     } catch (error) {
       // Enhanced network error handling
-      const errorDetails = handleNetworkError(error as Error, {
+      const errorDetails = await handleNetworkError(error as Error, {
         operation: 'fetch_current_clue',
         gameId,
         userId: localStorage.getItem('userId') || undefined
@@ -222,28 +295,158 @@ function PlayGame() {
 
       console.error('Network error fetching clue:', errorDetails)
       const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
-      showToast.error(`Network error: ${userMessage}`)
+      const errorMessage = `Network error: ${userMessage}`
+      setGameError(errorMessage)
+      showToast.error(errorMessage)
+      setLoading(false)
     } finally {
       console.log('Setting loading to false')
       setLoading(false)
     }
   }, [gameId, currentClueNumber, location])
 
-  useEffect(() => {
-    console.log('UseEffect triggered - showPirateMap:', showPirateMap, 'loading:', loading)
-    // Only fetch data after pirate map animation completes
-    if (!showPirateMap) {
-      console.log('Pirate map completed, fetching clue data...')
-      const fetchData = async () => {
-        // First fetch user's progress to get current clue number
-        const progressClueNumber = await fetchProgress()
-        // Then fetch the current clue based on progress
-        await fetchCurrentClue(progressClueNumber)
-        requestLocation()
+  const requestLocation = useCallback(async () => {
+    if (navigator.geolocation) {
+      // Check current permission status if available
+      let permissionStatus = 'unknown'
+      if ('permissions' in navigator) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'geolocation' })
+          permissionStatus = permission.state
+          console.log('Geolocation permission status:', permissionStatus)
+        } catch {
+          console.log('Permissions API not supported, proceeding with geolocation request')
+        }
       }
-      fetchData()
+
+      // If permission is denied, show helpful message
+      if (permissionStatus === 'denied') {
+        showToast.error('Location access is blocked. Please enable location sharing in your browser settings and refresh the page.')
+        return
+      }
+
+      // If permission is not granted yet, show informative message
+      if (permissionStatus === 'prompt') {
+        showToast.info('Location access needed. Please allow location sharing when prompted.')
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const newLocation = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          }
+          setLocation(newLocation)
+          console.log('Location obtained successfully:', position.coords.latitude, position.coords.longitude)
+
+          // Refetch clue with new location
+          fetchCurrentClue(currentClueNumber)
+          showToast.success('Location updated successfully!')
+        },
+        async (error) => {
+          // Use enhanced error handling
+          const errorDetails = await handleGeolocationError(error, gameId, localStorage.getItem('userId') || undefined)
+          const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
+
+          console.error('Geolocation error details:', errorDetails)
+
+          // Log the error using the proper utility
+          await logError(errorDetails)
+
+          // Enhanced error messages for permission denied
+          if (error.code === error.PERMISSION_DENIED) {
+            showToast.error(
+              'Location permission denied. Please:\n' +
+              '1. Click the location icon in your browser address bar\n' +
+              '2. Select "Allow" for location access\n' +
+              '3. Refresh the page and try again'
+            )
+          } else {
+            // For development/testing, set a default location (Calabar, Nigeria)
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('Using default location for development due to:', errorDetails.errorMessage)
+              setLocation({
+                lat: 4.9518,
+                lng: 8.3229
+              })
+              showToast.warning(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
+            } else {
+              showToast.error(userMessage)
+            }
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 15000, // Increased timeout
+          maximumAge: 300000 // 5 minutes
+        }
+      )
+    } else {
+      console.error('Geolocation is not supported by this browser')
+
+      // Enhanced error handling for unsupported browsers
+      const errorDetails = {
+        errorType: ErrorTypes.GEOLOCATION_NOT_SUPPORTED,
+        errorMessage: 'Geolocation is not supported by this browser',
+        timestamp: new Date().toISOString(),
+        gameId,
+        userId: localStorage.getItem('userId') || undefined
+      }
+
+      // Log the error using the proper utility
+      await logError(errorDetails)
+
+      const userMessage = getUserFriendlyErrorMessage(ErrorTypes.GEOLOCATION_NOT_SUPPORTED)
+
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Using default location - geolocation not supported')
+        setLocation({
+          lat: 4.9518,
+          lng: 8.3229
+        })
+        showToast.warning(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
+      } else {
+        showToast.error(userMessage)
+      }
     }
-  }, [fetchCurrentClue, fetchProgress, showPirateMap]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gameId, currentClueNumber, fetchCurrentClue])
+
+  useEffect(() => {
+    console.log('UseEffect triggered - showPirateMap:', showPirateMap, 'loading:', loading, 'gameError:', gameError)
+    // Only fetch data after pirate map animation completes and if we don't have a clue yet and no error state
+    if (!showPirateMap && !currentClue && loading && !gameError) {
+      console.log('Pirate map completed, fetching clue data...')
+      let isMounted = true // Prevent state updates if component unmounts
+
+      const fetchData = async () => {
+        try {
+          // First fetch user's progress to get current clue number
+          const progressClueNumber = await fetchProgress()
+          if (!isMounted) return
+
+          // Then fetch the current clue based on progress
+          await fetchCurrentClue(progressClueNumber)
+          if (!isMounted) return
+
+          requestLocation()
+        } catch (error) {
+          console.error('Error during initial game load:', error)
+          if (isMounted) {
+            const errorMessage = 'Failed to load game. This might be because you are not in the correct geographic location for this game. Please try refreshing the page or contact support.'
+            setGameError(errorMessage)
+            showToast.error(errorMessage)
+            setLoading(false)
+          }
+        }
+      }
+
+      fetchData()
+
+      return () => {
+        isMounted = false
+      }
+    }
+  }, [showPirateMap, currentClue, loading, gameError, fetchCurrentClue, fetchProgress, requestLocation])
 
   // Fallback: if still loading after pirate map is gone for too long, force completion
   useEffect(() => {
@@ -267,88 +470,6 @@ function PlayGame() {
       return () => clearTimeout(fallbackTimer)
     }
   }, [showPirateMap, loading, currentClue])
-
-  const requestLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          })
-          console.log('Location obtained successfully:', position.coords.latitude, position.coords.longitude)
-        },
-        (error) => {
-          // Use enhanced error handling
-          const errorDetails = handleGeolocationError(error, gameId, localStorage.getItem('userId') || undefined)
-          const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
-
-          console.error('Geolocation error details:', errorDetails)
-
-          // For development/testing, set a default location (Calabar, Nigeria)
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('Using default location for development due to:', errorDetails.errorMessage)
-            setLocation({
-              lat: 4.9518,
-              lng: 8.3229
-            })
-            showToast.warning(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
-          } else {
-            showToast.error(userMessage)
-          }
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 300000 // 5 minutes
-        }
-      )
-    } else {
-      console.error('Geolocation is not supported by this browser')
-
-      // Enhanced error handling for unsupported browsers
-      const errorDetails = {
-        errorType: ErrorTypes.GEOLOCATION_NOT_SUPPORTED,
-        errorMessage: 'Browser does not support geolocation API',
-        timestamp: new Date().toISOString(),
-        gameId,
-        additionalContext: {
-          userAgent: navigator.userAgent,
-          browserSupportsGeolocation: false,
-          errorOccurredAt: 'game_play_location_request'
-        }
-      }
-
-      // Log the error
-      fetch('/api/activities', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-        },
-        body: JSON.stringify({
-          type: 'ERROR_OCCURRED',
-          description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
-          details: errorDetails,
-          userId: localStorage.getItem('userId') || 'anonymous'
-        })
-      }).catch(logError => console.error('Failed to log geolocation error:', logError))
-
-      const userMessage = getUserFriendlyErrorMessage(ErrorTypes.GEOLOCATION_NOT_SUPPORTED)
-
-      // Fallback for browsers without geolocation
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Using default location - geolocation not supported')
-        setLocation({
-          lat: 4.9518,
-          lng: 8.3229
-        })
-        showToast.warning(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
-      } else {
-        showToast.error(userMessage)
-      }
-    }
-  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -374,19 +495,8 @@ function PlayGame() {
         }
       }
 
-      fetch('/api/activities', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-        },
-        body: JSON.stringify({
-          type: 'ERROR_OCCURRED',
-          description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
-          details: errorDetails,
-          userId: localStorage.getItem('userId') || 'anonymous'
-        })
-      }).catch(logError => console.error('Failed to log validation error:', logError))
+      // Log the error using the proper utility
+      await logError(errorDetails)
 
       showToast.error(errorMessage)
       return
@@ -466,7 +576,7 @@ function PlayGame() {
           await updateProgress(currentClueNumber, data.submission.isCorrect, submissionData)
         } catch (progressError) {
           // Log progress update error but don't block user flow
-          const errorDetails = handleNetworkError(progressError as Error, {
+          const errorDetails = await handleNetworkError(progressError as Error, {
             operation: 'update_progress',
             gameId,
             userId: userId || undefined
@@ -509,25 +619,14 @@ function PlayGame() {
           }
         }
 
-        fetch('/api/activities', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token || ''}`
-          },
-          body: JSON.stringify({
-            type: 'ERROR_OCCURRED',
-            description: `${errorDetails.errorType}: ${errorDetails.errorMessage}`,
-            details: errorDetails,
-            userId: userId || 'anonymous'
-          })
-        }).catch(logError => console.error('Failed to log submission error:', logError))
+        // Log the error using the proper utility
+        await logError(errorDetails)
 
         showToast.error('Unexpected response format. Please try again.')
       }
     } catch (error) {
       // Enhanced network error handling
-      const errorDetails = handleNetworkError(error as Error, {
+      const errorDetails = await handleNetworkError(error as Error, {
         operation: 'submit_answer',
         gameId,
         userId: localStorage.getItem('userId') || undefined
@@ -597,6 +696,38 @@ function PlayGame() {
     )
   }
 
+  if (gameError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto">
+          <div className="bg-red-100 border border-red-300 rounded-lg p-6 mb-6">
+            <h2 className="text-2xl font-bold text-red-800 mb-4">Game Loading Error</h2>
+            <p className="text-red-700 mb-4">{gameError}</p>
+            <div className="space-y-3">
+              <button
+                onClick={() => {
+                  setGameError(null)
+                  setLoading(true)
+                  setShowPirateMap(true)
+                  setCurrentClue(null)
+                }}
+                className="bg-red-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-red-700 w-full"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={() => window.location.href = '/games'}
+                className="bg-gray-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 w-full"
+              >
+                Back to Games
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (!currentClue) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -622,8 +753,28 @@ function PlayGame() {
               <div className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
                 Progress: {Math.round((currentClue.clueNumber / totalClues) * 100)}%
               </div>
-              {location && (
-                <span className="text-xs text-green-600">📍 Location detected</span>
+              {location ? (
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-green-600">📍 Location detected</span>
+                  <button
+                    onClick={requestLocation}
+                    className="text-xs text-blue-600 hover:text-blue-700 underline"
+                    title="Refresh location"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-orange-600">📍 Location needed</span>
+                  <button
+                    onClick={requestLocation}
+                    className="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600"
+                    title="Get location"
+                  >
+                    📍 Get Location
+                  </button>
+                </div>
               )}
             </div>
           </div>

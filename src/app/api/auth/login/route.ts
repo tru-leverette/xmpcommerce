@@ -14,7 +14,7 @@ const loadDependencies = async () => {
 export async function POST(request: NextRequest) {
   try {
     const { prisma, comparePasswords, generateToken, generateRefreshToken, createRefreshTokenRecord } = await loadDependencies()
-    
+
     const { email, password } = await request.json()
 
     if (!email || !password) {
@@ -24,12 +24,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
+
     // Find user by email
     const user = await prisma.user.findUnique({
       where: { email }
     })
 
     if (!user) {
+      // Log failed login attempt with system user
+      try {
+        let systemUser = await prisma.user.findUnique({
+          where: { email: 'system@xmpcommerce.com' }
+        })
+        if (!systemUser) {
+          systemUser = await prisma.user.create({
+            data: {
+              email: 'system@xmpcommerce.com',
+              username: 'system',
+              password: 'system-account-not-for-login',
+              role: 'USER'
+            }
+          })
+        }
+        await prisma.activity.create({
+          data: {
+            type: 'USER_ERROR',
+            description: `Failed login attempt: user not found for email ${email}`,
+            userId: systemUser.id,
+            details: {
+              email,
+              reason: 'User not found',
+              loginTime: new Date().toISOString(),
+              indicator: 'red-dot'
+            }
+          }
+        })
+      } catch (activityError) {
+        console.error('Failed to log failed login activity (user not found):', activityError)
+      }
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
@@ -46,8 +78,25 @@ export async function POST(request: NextRequest) {
 
     // Verify password
     const isValidPassword = await comparePasswords(password, user.password)
-    
     if (!isValidPassword) {
+      // Log failed login attempt
+      try {
+        await prisma.activity.create({
+          data: {
+            type: 'USER_ERROR',
+            description: `Failed login attempt: invalid password for user ${user.username}`,
+            userId: user.id,
+            details: {
+              email,
+              reason: 'Invalid password',
+              loginTime: new Date().toISOString(),
+              indicator: 'red-dot'
+            }
+          }
+        })
+      } catch (activityError) {
+        console.error('Failed to log failed login activity (invalid password):', activityError)
+      }
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }

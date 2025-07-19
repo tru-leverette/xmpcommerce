@@ -1,3 +1,16 @@
+enum ClueType {
+  TEXT_ANSWER
+  PHOTO_UPLOAD
+  COMBINED
+}
+
+enum Phase {
+  PHASE_1
+  PHASE_2
+  PHASE_3
+  PHASE_4
+}
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -39,6 +52,7 @@ model Game {
   totalLevels    Int           @default(12) // Total levels (12 as specified)
   stagesPerLevel Int           @default(4) // Stages per level (4 as specified)
   cluesPerStage  Int           @default(4) // Clues per stage (4 as specified)
+  phase          Phase         @default(PHASE_1) // Track current phase of the game
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   creatorId      String
@@ -193,6 +207,7 @@ model ParticipantProgress {
   completedAt            DateTime?
   lastLocation           Json? // Last known geolocation
   lastLocationValid      Boolean     @default(false) // Is participant in valid game region?
+  phase                  Phase       @default(PHASE_1) // Track participant's current phase
   createdAt              DateTime    @default(now())
   updatedAt              DateTime    @updatedAt
   participantId          String
@@ -274,8 +289,8 @@ model Activity {
   description String
   details     Json?
   createdAt   DateTime     @default(now())
-  userId      String
-  user        User         @relation(fields: [userId], references: [id])
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id])
 
   @@index([userId], map: "activities_userId_fkey")
   @@index([createdAt])
@@ -305,14 +320,9 @@ enum ParticipantStatus {
   BANNED
 }
 
-enum ClueType {
-  TEXT_ANSWER
-  PHOTO_UPLOAD
-  COMBINED
-}
-
 enum ActivityType {
   GAME_CREATED
+
   GAME_UPDATED
   GAME_DELETED
   GAME_REGISTERED
@@ -323,6 +333,7 @@ enum ActivityType {
   USER_BANNED
   USER_UNBANNED
   TOKEN_REFRESH
+  USER_ERROR
 }
 
 enum BadgeType {
