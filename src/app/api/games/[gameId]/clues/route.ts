@@ -1,10 +1,87 @@
-import { verifyToken } from '@/lib/auth'
+import { verifyToken } from '@/lib/auth';
 import {
   assignParticipantToClueSet,
   type Location
-} from '@/lib/clueSetManager'
-import { prisma } from '@/lib/prisma'
-import { NextRequest, NextResponse } from 'next/server'
+} from '@/lib/clueSetManager';
+import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server';
+
+// Enhanced geographic restriction check based on game phases
+async function checkGeographicRestriction(
+  userLocation: { lat: number; lng: number },
+  gameLocation: string,
+  gameLevel: number = 1
+): Promise<{ isRestricted: boolean; reason?: string; suggestedAction?: string }> {
+
+  // Define rough geographic regions for continent-level restrictions
+  const continents = {
+    'Africa': {
+      latMin: -35,
+      latMax: 37,
+      lngMin: -20,
+      lngMax: 55
+    },
+    'North America': {
+      latMin: 15,
+      latMax: 83,
+      lngMin: -168,
+      lngMax: -52
+    },
+    'Europe': {
+      latMin: 35,
+      latMax: 71,
+      lngMin: -25,
+      lngMax: 45
+    },
+    'Asia': {
+      latMin: -10,
+      latMax: 77,
+      lngMin: 40,
+      lngMax: 180
+    }
+  }
+
+  // First check: Are they on the right continent for this game?
+  const gameContinent = continents[gameLocation as keyof typeof continents]
+  if (!gameContinent) {
+    // If we don't have continent data, allow access (could be global game)
+    return { isRestricted: false }
+  }
+
+  // Check if user is on the correct continent
+  const isOnCorrectContinent = userLocation.lat >= gameContinent.latMin &&
+    userLocation.lat <= gameContinent.latMax &&
+    userLocation.lng >= gameContinent.lngMin &&
+    userLocation.lng <= gameContinent.lngMax
+
+  if (!isOnCorrectContinent) {
+    return {
+      isRestricted: true,
+      reason: `This game is designed for players in ${gameLocation}. You appear to be on a different continent.`,
+      suggestedAction: 'Please check if there are games available in your region.'
+    }
+  }
+
+  // Determine game phase based on level
+  const getGamePhase = (level: number): number => {
+    if (level >= 1 && level <= 3) return 1  // Individual area play
+    if (level >= 4 && level <= 6) return 2  // Group area play
+    if (level >= 7 && level <= 9) return 3  // Group state play
+    if (level >= 10 && level <= 12) return 4 // Group country play
+    return 1 // Default to phase 1
+  }
+
+  const currentPhase = getGamePhase(gameLevel)
+
+  // Phase-based restrictions will be handled by clue set assignment
+  // For now, if they're on the right continent, allow access
+  // The clue set assignment will handle the detailed geographic restrictions
+
+  // Log the phase for debugging
+  console.log(`Game phase ${currentPhase} for level ${gameLevel}`)
+
+  return { isRestricted: false }
+}
 
 export async function GET(
   request: NextRequest,
@@ -18,6 +95,13 @@ export async function GET(
     const clueNumber = parseInt(searchParams.get('clueNumber') || '1')
     const lat = parseFloat(searchParams.get('lat') || '0')
     const lng = parseFloat(searchParams.get('lng') || '0')
+
+    console.log(`Clues API called with: clueNumber=${clueNumber}, lat=${lat}, lng=${lng}`)
+    console.log(`URL parameters:`, {
+      clueNumber: searchParams.get('clueNumber'),
+      lat: searchParams.get('lat'),
+      lng: searchParams.get('lng')
+    })
 
     // Verify authentication
     const authHeader = request.headers.get('authorization')
@@ -57,6 +141,117 @@ export async function GET(
         error: 'Invalid location coordinates provided',
         errorCode: 'INVALID_COORDINATES'
       }, { status: 400 })
+    }
+
+    // Get game data
+    const game = await prisma.game.findUnique({
+      where: { id: gameId },
+      select: {
+        id: true,
+        title: true,
+        location: true,
+        region: true
+      }
+    })
+
+    if (!game) {
+      return NextResponse.json({
+        error: 'Game not found',
+        errorCode: 'GAME_NOT_FOUND'
+      }, { status: 404 })
+    }
+
+    // Check for geographic restriction FIRST - before any other processing
+    if (game.location && game.location !== 'Global') {
+      // If no location is provided, we need to require it for location-specific games
+      if (lat === 0 && lng === 0) {
+        console.log(`No location provided for location-specific game: ${game.location}`)
+
+        // Log the missing location attempt for admin awareness
+        try {
+          await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/activities`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token || ''}`
+            },
+            body: JSON.stringify({
+              type: 'LOCATION_REQUIRED',
+              description: `User attempted to access location-specific game without providing location`,
+              details: {
+                userId: decoded.userId,
+                gameId,
+                gameRegion: game.location,
+                timestamp: new Date().toISOString()
+              },
+              userId: decoded.userId
+            })
+          })
+        } catch (logError) {
+          console.error('Failed to log location required:', logError)
+        }
+
+        return NextResponse.json({
+          error: 'LOCATION_REQUIRED',
+          message: `This game requires your location. Please enable location sharing to continue.`,
+          gameRegion: game.location,
+          clue: null,
+          totalClues: 0,
+          isLocationRequired: true,
+          suggestedAction: 'Please enable location sharing and try again.'
+        }, { status: 200 }) // 200 OK - this is expected behavior, not an error
+      }
+
+      console.log(`Checking geographic restriction: User at (${lat}, ${lng}) for game in ${game.location}`)
+
+      // Check geographic restriction based on game phase
+      const restrictionCheck = await checkGeographicRestriction(
+        { lat, lng },
+        game.location,
+        1 // Default to level 1 for now
+      )
+
+      if (restrictionCheck.isRestricted) {
+        // Log geographic restriction access attempt for admin awareness
+        try {
+          await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/activities`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token || ''}`
+            },
+            body: JSON.stringify({
+              type: 'GEOGRAPHIC_RESTRICTION_ACCESSED',
+              description: `User from different region attempted to access game clues`,
+              details: {
+                userId: decoded.userId,
+                gameId,
+                userLocation: { lat, lng },
+                gameRegion: game.location,
+                restrictionReason: restrictionCheck.reason,
+                timestamp: new Date().toISOString()
+              },
+              userId: decoded.userId
+            })
+          })
+        } catch (logError) {
+          console.error('Failed to log geographic restriction access:', logError)
+        }
+
+        console.log(`Geographic restriction applied: ${restrictionCheck.reason}`)
+
+        // Return proper response for geographic restriction
+        return NextResponse.json({
+          error: 'GEOGRAPHIC_RESTRICTION',
+          message: restrictionCheck.reason,
+          userLocation: { lat, lng },
+          gameRegion: game.location,
+          clue: null,
+          totalClues: 0,
+          isGeographicRestriction: true,
+          suggestedAction: restrictionCheck.suggestedAction
+        }, { status: 200 }) // 200 OK - this is expected behavior, not an error
+      }
     }
 
     // Get participant
@@ -131,61 +326,45 @@ export async function GET(
       hunts = hunts.filter(hunt => hunt.clueSetId === participant.clueSetId)
     }
 
-    // If no hunts exist for this clue set, fall back to default mock clues
+    // If no hunts exist for this clue set, return no clues available
     if (hunts.length === 0) {
-      const mockClues = [
-        {
-          id: 'clue-1',
-          clueNumber: 1,
-          question: 'Find the majestic creature that roams the savanna, known as the king of beasts. What sound does it make?',
-          hint: 'Listen carefully to the sounds of the African plains',
-          type: 'TEXT_ANSWER' as const,
-          huntId: 'hunt-1',
-          expectedAnswers: ['roar', 'roars', 'roaring']
-        },
-        {
-          id: 'clue-2',
-          clueNumber: 2,
-          question: 'Capture a photo of something red that brings joy to children and has wheels.',
-          hint: 'Think about playground equipment or toys',
-          type: 'PHOTO_UPLOAD' as const,
-          huntId: 'hunt-1',
-          expectedAnswers: ['bicycle', 'bike', 'tricycle', 'wagon', 'toy car']
-        },
-        {
-          id: 'clue-3',
-          clueNumber: 3,
-          question: 'Find the tallest structure you can see and tell me: What flies high above it during the day?',
-          hint: 'Look up to the sky for something that waves in the wind',
-          type: 'TEXT_ANSWER' as const,
-          huntId: 'hunt-1',
-          expectedAnswers: ['flag', 'bird', 'birds', 'airplane', 'plane', 'clouds']
-        },
-        {
-          id: 'clue-4',
-          clueNumber: 4,
-          question: 'For your final challenge in this stage: Take a photo of yourself at a place that represents community gathering - somewhere people come together to celebrate, learn, or help each other. Write one word that describes how this place makes you feel.',
-          hint: 'Think about the heart of your neighborhood',
-          type: 'COMBINED' as const,
-          huntId: 'hunt-1',
-          expectedAnswers: ['community center', 'park', 'church', 'temple', 'mosque', 'town hall', 'happy', 'peaceful', 'connected', 'welcomed', 'safe']
-        }
-      ]
-
-      const currentClueIndex = Math.min(Math.max(clueNumber - 1, 0), mockClues.length - 1)
-      const mockClue = mockClues[currentClueIndex]
+      // Log that no clues are available for this location
+      try {
+        await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/activities`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token || ''}`
+          },
+          body: JSON.stringify({
+            type: 'NO_CLUES_AVAILABLE',
+            description: `No clues available for participant's location`,
+            details: {
+              userId: decoded.userId,
+              gameId,
+              userLocation: { lat, lng },
+              gameRegion: game.location,
+              clueSetId: participant.clueSetId,
+              clueNumber,
+              timestamp: new Date().toISOString()
+            },
+            userId: decoded.userId
+          })
+        })
+      } catch (logError) {
+        console.error('Failed to log no clues available:', logError)
+      }
 
       return NextResponse.json({
-        clue: mockClue,
-        totalClues: mockClues.length,
-        isLastClue: currentClueIndex === mockClues.length - 1,
-        currentClueNumber: currentClueIndex + 1,
-        clueSetInfo: participant.clueSet ? {
-          id: participant.clueSet.id,
-          name: participant.clueSet.name,
-          description: participant.clueSet.description
-        } : null
-      })
+        error: 'NO_CLUES_AVAILABLE',
+        message: 'No clues are available for your current location.',
+        userLocation: { lat, lng },
+        gameRegion: game.location,
+        clue: null,
+        totalClues: 0,
+        isNoCluesAvailable: true,
+        suggestedAction: 'Please wait for clues to be generated for your area, or try a different location.'
+      }, { status: 200 })
     }
 
     // Find the hunt that contains the requested clue
@@ -335,99 +514,6 @@ export async function POST(
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 })
     }
 
-    // Handle mock clues (when using fallback system)
-    if (clueId && clueId.startsWith('clue-')) {
-      // Enhanced mock validation system - 4 clues per stage
-      const mockClues = [
-        {
-          id: 'clue-1',
-          expectedAnswers: ['roar', 'roars', 'roaring'],
-          successMessage: 'Correct! Lions do roar.',
-          failMessage: 'Not quite right. Think about the sound a lion makes.'
-        },
-        {
-          id: 'clue-2',
-          expectedAnswers: ['bicycle', 'bike', 'tricycle', 'wagon', 'toy car'],
-          successMessage: 'Great photo! That\'s exactly what we were looking for.',
-          failMessage: 'This doesn\'t seem to match what we\'re looking for. Try finding something red with wheels.'
-        },
-        {
-          id: 'clue-3',
-          expectedAnswers: ['flag', 'bird', 'birds', 'airplane', 'plane', 'clouds'],
-          successMessage: 'Excellent observation! You\'re really looking up.',
-          failMessage: 'Look higher! What do you see flying or waving above the tallest structure?'
-        },
-        {
-          id: 'clue-4',
-          expectedAnswers: ['community center', 'park', 'church', 'temple', 'mosque', 'town hall', 'happy', 'peaceful', 'connected', 'welcomed', 'safe'],
-          successMessage: 'Beautiful! You\'ve completed this stage and found the heart of community.',
-          failMessage: 'Think about places where people come together for shared experiences.'
-        }
-      ]
-
-      // Find the current clue for validation based on clueId
-      const currentClueNum = parseInt(clueId?.split('-')[1] || '1')
-      const currentClueIndex = Math.min(currentClueNum - 1, mockClues.length - 1)
-      const currentClue = mockClues[currentClueIndex]
-
-      let isCorrect = false
-      let aiAnalysis = ''
-
-      if (submissionType === 'TEXT_ANSWER') {
-        // Check if answer matches any expected answers
-        const userAnswer = textAnswer?.toLowerCase().trim() || ''
-        isCorrect = currentClue.expectedAnswers.some(expectedAnswer =>
-          userAnswer.includes(expectedAnswer.toLowerCase())
-        )
-        aiAnalysis = isCorrect ? currentClue.successMessage : currentClue.failMessage
-      } else if (submissionType === 'PHOTO_UPLOAD') {
-        // In real app, analyze photo with AI vision
-        // For testing, we'll accept all photo uploads as correct
-        isCorrect = true // Always accept photos for testing purposes
-        aiAnalysis = currentClue.successMessage
-      } else if (submissionType === 'COMBINED') {
-        // For combined submissions, we accept photos and check text answers
-        const userAnswer = textAnswer?.toLowerCase().trim() || ''
-        isCorrect = currentClue.expectedAnswers.some(expectedAnswer =>
-          userAnswer.includes(expectedAnswer.toLowerCase())
-        ) || Math.random() > 0.4 // 60% success rate for combined if no text match
-        aiAnalysis = isCorrect ? currentClue.successMessage : currentClue.failMessage
-      }
-
-      const mockSubmission = {
-        id: `submission-${Date.now()}`,
-        isCorrect,
-        aiAnalysis,
-        pebblesEarned: isCorrect ? 10 : 0
-      }
-
-      // If correct, update participant pebbles
-      if (isCorrect) {
-        await prisma.participant.update({
-          where: { id: participant.id },
-          data: {
-            pebbles: { increment: 10 }
-          }
-        })
-      }
-
-      // Determine next clue information
-      const nextClueNum = currentClueNum + 1
-      const totalClues = 4 // 4 clues per stage
-      const hasNextClue = nextClueNum <= totalClues
-
-      return NextResponse.json({
-        submission: mockSubmission,
-        message: isCorrect
-          ? hasNextClue
-            ? `Correct! Moving to clue ${nextClueNum} of ${totalClues}.`
-            : 'Congratulations! You\'ve completed this stage!'
-          : 'Try again!',
-        nextClueNumber: isCorrect && hasNextClue ? nextClueNum : null,
-        isGameComplete: isCorrect && !hasNextClue
-      })
-    }
-
     // Handle real database clues
     const clue = await prisma.clue.findUnique({
       where: { id: clueId },
@@ -441,7 +527,10 @@ export async function POST(
     })
 
     if (!clue) {
-      return NextResponse.json({ error: 'Clue not found' }, { status: 404 })
+      return NextResponse.json({
+        error: 'Clue not found - No clues available for submission',
+        errorCode: 'CLUE_NOT_FOUND'
+      }, { status: 404 })
     }
 
     // Simple answer checking logic (you can enhance this with AI)

@@ -11,7 +11,7 @@ import {
   logError
 } from '@/lib/errorHandling'
 import { showToast } from '@/lib/toast'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
 interface Clue {
@@ -32,6 +32,7 @@ interface Submission {
 
 function PlayGame() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const gameId = params.gameId as string
 
   const [showPirateMap, setShowPirateMap] = useState(true)
@@ -46,6 +47,54 @@ function PlayGame() {
   const [totalClues, setTotalClues] = useState(4)
   const [gameComplete, setGameComplete] = useState(false)
   const [gameError, setGameError] = useState<string | null>(null) // Add error state to prevent recursive calls
+
+  // Initialize location from URL parameters or capture fresh location
+  useEffect(() => {
+    const initializeLocation = async () => {
+      // First check if location was passed in URL parameters
+      const urlLat = searchParams.get('lat')
+      const urlLng = searchParams.get('lng')
+
+      if (urlLat && urlLng) {
+        const lat = parseFloat(urlLat)
+        const lng = parseFloat(urlLng)
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+          console.log(`Location from URL: ${lat}, ${lng}`)
+          setLocation({ lat, lng })
+          return
+        }
+      }
+
+      // If no valid location in URL, try to capture fresh location
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(
+              resolve,
+              reject,
+              {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000 // Cache for 1 minute
+              }
+            )
+          })
+
+          const { latitude, longitude } = position.coords
+          console.log(`Fresh location captured: ${latitude}, ${longitude}`)
+          setLocation({ lat: latitude, lng: longitude })
+
+        } catch (error) {
+          console.error('Error capturing fresh location:', error)
+          // Don't show error toast here as it might be called during initial load
+          // The API will handle the missing location scenario
+        }
+      }
+    }
+
+    initializeLocation()
+  }, [searchParams])
 
   // Fetch user's progress from database
   const fetchProgress = useCallback(async () => {
@@ -175,6 +224,36 @@ function PlayGame() {
       const data = await response.json()
       console.log('Clue API response:', data)
 
+      // Handle location required response
+      if (data.isLocationRequired) {
+        const locationMessage = `Location Required: ${data.message}`
+        console.log('Location required:', data)
+        setGameError(locationMessage)
+        showToast.warning(locationMessage)
+        setLoading(false)
+        return
+      }
+
+      // Handle geographic restriction response
+      if (data.isGeographicRestriction) {
+        const restrictionMessage = `Geographic Restriction: ${data.message}`
+        console.log('Geographic restriction detected:', data)
+        setGameError(restrictionMessage)
+        showToast.warning(restrictionMessage)
+        setLoading(false)
+        return
+      }
+
+      // Handle no clues available response
+      if (data.isNoCluesAvailable) {
+        const noCluesMessage = `No Clues Available: ${data.message}`
+        console.log('No clues available:', data)
+        setGameError(noCluesMessage)
+        showToast.info(noCluesMessage)
+        setLoading(false)
+        return
+      }
+
       if (data.clue) {
         setCurrentClue(data.clue)
         setTotalClues(data.totalClues || 4)
@@ -228,13 +307,41 @@ function PlayGame() {
 
   const requestLocation = useCallback(async () => {
     if (navigator.geolocation) {
+      // Check current permission status if available
+      let permissionStatus = 'unknown'
+      if ('permissions' in navigator) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'geolocation' })
+          permissionStatus = permission.state
+          console.log('Geolocation permission status:', permissionStatus)
+        } catch {
+          console.log('Permissions API not supported, proceeding with geolocation request')
+        }
+      }
+
+      // If permission is denied, show helpful message
+      if (permissionStatus === 'denied') {
+        showToast.error('Location access is blocked. Please enable location sharing in your browser settings and refresh the page.')
+        return
+      }
+
+      // If permission is not granted yet, show informative message
+      if (permissionStatus === 'prompt') {
+        showToast.info('Location access needed. Please allow location sharing when prompted.')
+      }
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setLocation({
+          const newLocation = {
             lat: position.coords.latitude,
             lng: position.coords.longitude
-          })
+          }
+          setLocation(newLocation)
           console.log('Location obtained successfully:', position.coords.latitude, position.coords.longitude)
+
+          // Refetch clue with new location
+          fetchCurrentClue(currentClueNumber)
+          showToast.success('Location updated successfully!')
         },
         async (error) => {
           // Use enhanced error handling
@@ -246,21 +353,31 @@ function PlayGame() {
           // Log the error using the proper utility
           await logError(errorDetails)
 
-          // For development/testing, set a default location (Calabar, Nigeria)
-          if (process.env.NODE_ENV === 'development') {
-            console.warn('Using default location for development due to:', errorDetails.errorMessage)
-            setLocation({
-              lat: 4.9518,
-              lng: 8.3229
-            })
-            showToast.warning(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
+          // Enhanced error messages for permission denied
+          if (error.code === error.PERMISSION_DENIED) {
+            showToast.error(
+              'Location permission denied. Please:\n' +
+              '1. Click the location icon in your browser address bar\n' +
+              '2. Select "Allow" for location access\n' +
+              '3. Refresh the page and try again'
+            )
           } else {
-            showToast.error(userMessage)
+            // For development/testing, set a default location (Calabar, Nigeria)
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('Using default location for development due to:', errorDetails.errorMessage)
+              setLocation({
+                lat: 4.9518,
+                lng: 8.3229
+              })
+              showToast.warning(`Development Mode: ${userMessage}\n\nUsing default location (Calabar, Nigeria) for testing.`)
+            } else {
+              showToast.error(userMessage)
+            }
           }
         },
         {
           enableHighAccuracy: true,
-          timeout: 10000,
+          timeout: 15000, // Increased timeout
           maximumAge: 300000 // 5 minutes
         }
       )
@@ -292,7 +409,7 @@ function PlayGame() {
         showToast.error(userMessage)
       }
     }
-  }, [gameId])
+  }, [gameId, currentClueNumber, fetchCurrentClue])
 
   useEffect(() => {
     console.log('UseEffect triggered - showPirateMap:', showPirateMap, 'loading:', loading, 'gameError:', gameError)
@@ -636,8 +753,28 @@ function PlayGame() {
               <div className="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded">
                 Progress: {Math.round((currentClue.clueNumber / totalClues) * 100)}%
               </div>
-              {location && (
-                <span className="text-xs text-green-600">📍 Location detected</span>
+              {location ? (
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-green-600">📍 Location detected</span>
+                  <button
+                    onClick={requestLocation}
+                    className="text-xs text-blue-600 hover:text-blue-700 underline"
+                    title="Refresh location"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-orange-600">📍 Location needed</span>
+                  <button
+                    onClick={requestLocation}
+                    className="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600"
+                    title="Get location"
+                  >
+                    📍 Get Location
+                  </button>
+                </div>
               )}
             </div>
           </div>

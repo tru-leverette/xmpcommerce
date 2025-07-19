@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import Link from 'next/link'
-import Image from 'next/image'
-import { useRouter, usePathname } from 'next/navigation'
 import { useTabSecurity } from '@/lib/hooks/useTabSecurity'
+import Image from 'next/image'
+import Link from 'next/link'
+import { usePathname, useRouter } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
 
 export default function Navigation() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -21,13 +21,13 @@ export default function Navigation() {
 
   useEffect(() => {
     setMounted(true)
-    
+
     const checkAuth = () => {
       // Check if user is authenticated
       const token = localStorage.getItem('token')
       if (token) {
         setIsAuthenticated(true)
-        
+
         // Try to decode JWT token to get user info
         try {
           const payload = JSON.parse(atob(token.split('.')[1]))
@@ -74,7 +74,7 @@ export default function Navigation() {
     }
 
     document.addEventListener('mousedown', handleClickOutside)
-    
+
     return () => {
       window.removeEventListener('storage', handleStorageChange)
       window.removeEventListener('authChange', handleAuthChange)
@@ -115,7 +115,7 @@ export default function Navigation() {
 
   const handleLogout = async () => {
     const token = localStorage.getItem('token')
-    
+
     // Call logout API to record activity before clearing token
     if (token) {
       try {
@@ -131,16 +131,16 @@ export default function Navigation() {
         // Continue with logout even if API call fails
       }
     }
-    
+
     localStorage.removeItem('token')
     setIsAuthenticated(false)
     setUserRole(null)
     setUserName('')
     setShowDropdown(false)
-    
+
     // Dispatch custom event to notify other components
     window.dispatchEvent(new Event('authChange'))
-    
+
     router.push('/')
   }
 
@@ -160,10 +160,10 @@ export default function Navigation() {
           <div className="flex justify-between items-center py-4">
             {/* Logo */}
             <Link href="/" className="flex items-center">
-              <Image 
-                src="/parrot_logo.png" 
-                alt="Scavenger Hunt Logo" 
-                width={250} 
+              <Image
+                src="/parrot_logo.png"
+                alt="Scavenger Hunt Logo"
+                width={250}
                 height={80}
                 style={{ width: 'auto', height: '80px' }}
                 priority
@@ -195,10 +195,10 @@ export default function Navigation() {
         <div className="flex justify-between items-center py-4">
           {/* Logo */}
           <Link href="/" className="flex items-center">
-            <Image 
-              src="/parrot_logo.png" 
-              alt="Scavenger Hunt Logo" 
-              width={250} 
+            <Image
+              src="/parrot_logo.png"
+              alt="Scavenger Hunt Logo"
+              width={250}
               height={80}
               style={{ width: 'auto', height: '80px' }}
               priority
@@ -208,23 +208,23 @@ export default function Navigation() {
           {/* Navigation Links */}
           <div className="flex items-center space-x-6">
             {/* Games link - available to everyone */}
-            <Link 
-              href="/games" 
+            <Link
+              href="/games"
               className="text-gray-700 hover:text-blue-600"
             >
               Games
             </Link>
-            
+
             {!isAuthenticated ? (
               <>
-                <Link 
-                  href="/auth/login" 
+                <Link
+                  href="/auth/login"
                   className="text-gray-700 hover:text-blue-600"
                 >
                   Login
                 </Link>
-                <Link 
-                  href="/auth/register" 
+                <Link
+                  href="/auth/register"
                   className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
                 >
                   Register
@@ -233,13 +233,13 @@ export default function Navigation() {
             ) : (
               <div className="flex items-center space-x-6">
                 {/* Dashboard link for authenticated users */}
-                <Link 
-                  href="/dashboard" 
+                <Link
+                  href="/dashboard"
                   className="text-gray-700 hover:text-blue-600"
                 >
                   Dashboard
                 </Link>
-                
+
                 {/* User Avatar Dropdown */}
                 <div className="relative" ref={dropdownRef}>
                   <button
@@ -254,14 +254,6 @@ export default function Navigation() {
                   {/* Dropdown Menu */}
                   {showDropdown && (
                     <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
-                      <Link
-                        href="/user/profile"
-                        className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                        onClick={() => setShowDropdown(false)}
-                      >
-                        Settings
-                      </Link>
-                      
                       {(userRole === 'ADMIN' || userRole === 'SUPERADMIN') && (
                         <Link
                           href="/admin"
@@ -271,9 +263,7 @@ export default function Navigation() {
                           Admin Panel
                         </Link>
                       )}
-                      
                       <hr className="my-1" />
-                      
                       <button
                         onClick={handleLogout}
                         className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"

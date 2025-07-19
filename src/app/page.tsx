@@ -10,17 +10,17 @@ export default function Home() {
             Welcome to the Scavenger Hunt
           </h1>
           <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-            Embark on epic adventures, solve AI-powered clues, and collect pebbles 
+            Embark on epic adventures, solve AI-powered clues, and collect scavenger stones
             in location-based scavenger hunts around the world.
           </p>
           <div className="flex gap-4 justify-center">
-            <Link 
+            <Link
               href="/auth/register"
               className="bg-gradient-to-r from-emerald-600 to-teal-700 text-white px-8 py-3 rounded-lg font-semibold hover:from-emerald-700 hover:to-teal-800 transition-all duration-300 transform hover:scale-105 shadow-lg"
             >
               Get Started
             </Link>
-            <Link 
+            <Link
               href="/games"
               className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-8 py-3 rounded-lg font-semibold hover:from-amber-600 hover:to-orange-700 transition-all duration-300 transform hover:scale-105 shadow-lg border-2 border-amber-400"
             >
@@ -43,7 +43,7 @@ export default function Home() {
               </p>
             </div>
           </div>
-          
+
           <div className="group relative overflow-hidden bg-emerald-400 p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 border-2 border-emerald-500">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/40 rounded-full -translate-y-16 translate-x-16"></div>
             <div className="relative z-10">
@@ -56,16 +56,16 @@ export default function Home() {
               </p>
             </div>
           </div>
-          
+
           <div className="group relative overflow-hidden bg-pink-400 p-8 rounded-2xl shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:scale-105 border-2 border-pink-500">
             <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/40 rounded-full -translate-y-16 translate-x-16"></div>
             <div className="relative z-10">
               <div className="w-16 h-16 bg-pink-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform border-2 border-pink-700">
                 <span className="text-3xl">💎</span>
               </div>
-              <h3 className="text-2xl font-bold text-white mb-4">Collect Pebbles</h3>
+              <h3 className="text-2xl font-bold text-white mb-4">Collect Scavenger Stones</h3>
               <p className="text-white leading-relaxed">
-                Earn pebbles for solving clues and use them to access new stages and levels.
+                Earn scavenger stones for solving clues and use them to access new stages and levels.
               </p>
             </div>
           </div>
@@ -82,7 +82,7 @@ export default function Home() {
               <h4 className="font-semibold mb-2">Choose Your Hunt</h4>
               <p className="text-sm text-gray-600">Browse and join exciting scavenger hunts in your area</p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-16 h-16 bg-green-500 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
                 2
@@ -90,15 +90,15 @@ export default function Home() {
               <h4 className="font-semibold mb-2">Follow AI Clues</h4>
               <p className="text-sm text-gray-600">Solve intelligent location-based clues that adapt to your surroundings</p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-16 h-16 bg-purple-500 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
                 3
               </div>
-              <h4 className="font-semibold mb-2">Collect Pebbles</h4>
-              <p className="text-sm text-gray-600">Earn pebbles for each solved clue and unlock new challenges</p>
+              <h4 className="font-semibold mb-2">Collect Scavenger Stones</h4>
+              <p className="text-sm text-gray-600">Earn scavenger stones for each solved clue and unlock new challenges</p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-16 h-16 bg-yellow-500 text-white rounded-full flex items-center justify-center text-2xl font-bold mx-auto mb-4">
                 4

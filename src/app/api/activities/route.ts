@@ -19,10 +19,10 @@ export async function GET(request: NextRequest) {
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
-    
+
     console.log('Activities API - Auth header:', authHeader)
     console.log('Activities API - Extracted token:', token)
-    
+
     if (!token) {
       console.log('Activities API - No token provided')
       return NextResponse.json(
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       )
     }
-    
+
     // Temporarily allow all authenticated users to view activities for testing
     console.log('Activities API - User authenticated with role:', decoded.role)
 
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       take: limit
     })
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       activities,
       pagination: {
         currentPage: page,
@@ -97,7 +97,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { prisma } = await loadDependencies()
-    
+
     const { type, description, details, userId } = await request.json()
 
     if (!type || !description) {
@@ -109,14 +109,14 @@ export async function POST(request: NextRequest) {
 
     // Handle anonymous users by creating a system user or skipping user association
     let finalUserId = userId
-    
+
     // If userId is 'anonymous' or undefined, try to create/find a system user
     if (!userId || userId === 'anonymous') {
       // Try to find or create a system user for anonymous activities
       let systemUser = await prisma.user.findUnique({
         where: { email: 'system@xmpcommerce.com' }
       })
-      
+
       if (!systemUser) {
         // Create a system user for anonymous activities
         systemUser = await prisma.user.create({
@@ -128,20 +128,20 @@ export async function POST(request: NextRequest) {
           }
         })
       }
-      
+
       finalUserId = systemUser.id
     } else {
       // Verify the user exists
       const userExists = await prisma.user.findUnique({
         where: { id: userId }
       })
-      
+
       if (!userExists) {
         // If user doesn't exist, use system user
         let systemUser = await prisma.user.findUnique({
           where: { email: 'system@xmpcommerce.com' }
         })
-        
+
         if (!systemUser) {
           systemUser = await prisma.user.create({
             data: {
@@ -152,7 +152,7 @@ export async function POST(request: NextRequest) {
             }
           })
         }
-        
+
         finalUserId = systemUser.id
       }
     }

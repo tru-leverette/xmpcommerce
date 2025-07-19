@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import { NextRequest, NextResponse } from 'next/server'
 
 // Dynamic route configuration to prevent static generation
 export const dynamic = 'force-dynamic'
@@ -11,11 +11,11 @@ export async function GET(request: NextRequest) {
     // Lazy load dependencies
     const { prisma } = await import('@/lib/prisma')
     const { getTokenFromHeader, verifyToken } = await import('@/lib/auth')
-    
+
     // Check if user is authenticated (optional for this endpoint)
     const authHeader = request.headers.get('authorization')
     let currentUserId = null
-    
+
     if (authHeader) {
       try {
         const token = getTokenFromHeader(authHeader)
@@ -29,7 +29,18 @@ export async function GET(request: NextRequest) {
     }
 
     const games = await prisma.game.findMany({
-      include: {
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        location: true,
+        status: true,
+        launchDate: true,
+        phase: true,
+        createdAt: true,
+        totalLevels: true,
+        stagesPerLevel: true,
+        cluesPerStage: true,
         creator: {
           select: {
             username: true
@@ -78,11 +89,11 @@ export async function POST(request: NextRequest) {
     // Lazy load dependencies
     const { prisma } = await import('@/lib/prisma')
     const { verifyToken, getTokenFromHeader } = await import('@/lib/auth')
-    
+
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
-    
+
     if (!token) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -91,7 +102,7 @@ export async function POST(request: NextRequest) {
     }
 
     const decoded = verifyToken(token)
-    
+
     if (decoded.role !== 'SUPERADMIN') {
       return NextResponse.json(
         { error: 'Insufficient permissions' },

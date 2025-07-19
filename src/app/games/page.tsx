@@ -5,6 +5,63 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 
+// Geographic restriction check function
+function checkGeographicRestriction(
+  userLocation: { lat: number; lng: number },
+  gameLocation: string
+): { isRestricted: boolean; reason?: string; suggestedAction?: string } {
+  // Define rough geographic regions for continent-level restrictions
+  const continents = {
+    'Africa': {
+      latMin: -35,
+      latMax: 37,
+      lngMin: -20,
+      lngMax: 55
+    },
+    'North America': {
+      latMin: 15,
+      latMax: 83,
+      lngMin: -168,
+      lngMax: -52
+    },
+    'Europe': {
+      latMin: 35,
+      latMax: 71,
+      lngMin: -25,
+      lngMax: 45
+    },
+    'Asia': {
+      latMin: -10,
+      latMax: 77,
+      lngMin: 40,
+      lngMax: 180
+    }
+  }
+
+  // First check: Are they on the right continent for this game?
+  const gameContinent = continents[gameLocation as keyof typeof continents]
+  if (!gameContinent) {
+    // If we don't have continent data, allow access (could be global game)
+    return { isRestricted: false }
+  }
+
+  // Check if user is on the correct continent
+  const isOnCorrectContinent = userLocation.lat >= gameContinent.latMin &&
+    userLocation.lat <= gameContinent.latMax &&
+    userLocation.lng >= gameContinent.lngMin &&
+    userLocation.lng <= gameContinent.lngMax
+
+  if (!isOnCorrectContinent) {
+    return {
+      isRestricted: true,
+      reason: `This game is designed for players in ${gameLocation}. You appear to be on a different continent.`,
+      suggestedAction: 'Please check if there are games available in your region.'
+    }
+  }
+
+  return { isRestricted: false }
+}
+
 interface Game {
   id: string
   title: string
@@ -12,6 +69,7 @@ interface Game {
   location: string
   status: 'PENDING' | 'UPCOMING' | 'ACTIVE' | 'COMPLETED'
   launchDate?: Date
+  phase: string
   creator: {
     username: string
   }
@@ -27,12 +85,117 @@ function Games() {
   const [registering, setRegistering] = useState<string | null>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isNavigating, setIsNavigating] = useState(false)
+  const [capturingLocation, setCapturingLocation] = useState<string | null>(null)
   const router = useRouter()
 
   // Handle navigation with loading state
   const handleNavigation = (url: string) => {
     setIsNavigating(true)
     router.push(url)
+  }
+
+  // Handle continue game with geolocation capture
+  const handleContinueGame = async (gameId: string, gameLocation: string) => {
+    setCapturingLocation(gameId)
+
+    try {
+      // Check if geolocation is available
+      if (!navigator.geolocation) {
+        showToast.error('Geolocation is not supported by this browser')
+        setCapturingLocation(null)
+        return
+      }
+
+      // Check current permission status if available
+      let permissionStatus = 'unknown'
+      if ('permissions' in navigator) {
+        try {
+          const permission = await navigator.permissions.query({ name: 'geolocation' })
+          permissionStatus = permission.state
+          console.log('Geolocation permission status:', permissionStatus)
+        } catch {
+          console.log('Permissions API not supported, proceeding with geolocation request')
+        }
+      }
+
+      // If permission is denied, show helpful message
+      if (permissionStatus === 'denied') {
+        showToast.error('Location access is blocked. Please enable location sharing in your browser settings and refresh the page.')
+        setCapturingLocation(null)
+        return
+      }
+
+      // If permission is not granted yet, show informative message
+      if (permissionStatus === 'prompt') {
+        showToast.info('Location access needed. Please allow location sharing when prompted.')
+      }
+
+      // Get user's current location
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          {
+            enableHighAccuracy: true,
+            timeout: 15000, // Increased timeout for better success rate
+            maximumAge: 60000 // Cache location for 1 minute
+          }
+        )
+      })
+
+      const { latitude, longitude } = position.coords
+      console.log(`Location captured: ${latitude}, ${longitude}`)
+
+      // Check geographic restrictions before navigating
+      if (gameLocation && gameLocation !== 'Global') {
+        const isRestricted = checkGeographicRestriction(
+          { lat: latitude, lng: longitude },
+          gameLocation
+        )
+
+        if (isRestricted.isRestricted) {
+          showToast.error(`Geographic Restriction: ${isRestricted.reason}\n\n${isRestricted.suggestedAction}`)
+          setCapturingLocation(null)
+          return
+        }
+      }
+
+      // Navigate to game access page
+      const url = `/games/${gameId}/access`
+      showToast.success('Location captured successfully!')
+
+      setIsNavigating(true)
+      router.push(url)
+
+    } catch (error) {
+      console.error('Error capturing location:', error)
+
+      // Handle different geolocation errors
+      if (error instanceof GeolocationPositionError) {
+        switch (error.code) {
+          case error.PERMISSION_DENIED:
+            showToast.error(
+              'Location permission denied. Please:\n' +
+              '1. Click the location icon in your browser address bar\n' +
+              '2. Select "Allow" for location access\n' +
+              '3. Refresh the page and try again'
+            )
+            break
+          case error.POSITION_UNAVAILABLE:
+            showToast.error('Location information unavailable. Please try again or check your device settings.')
+            break
+          case error.TIMEOUT:
+            showToast.error('Location request timed out. Please try again.')
+            break
+          default:
+            showToast.error('An unknown error occurred while getting location. Please try again.')
+        }
+      } else {
+        showToast.error('Unable to capture location. Please try again.')
+      }
+    } finally {
+      setCapturingLocation(null)
+    }
   }
 
   const fetchGames = useCallback(async () => {
@@ -298,6 +461,10 @@ function Games() {
                       <span className="ml-2">{game.location}</span>
                     </div>
                     <div className="flex items-center text-sm text-gray-500">
+                      <span className="font-medium">Phase:</span>
+                      <span className="ml-2">{game.phase.replace('PHASE_', 'Phase ')}</span>
+                    </div>
+                    <div className="flex items-center text-sm text-gray-500">
                       <span className="font-medium">Participants:</span>
                       <span className="ml-2">{game._count.participants}</span>
                     </div>
@@ -336,10 +503,21 @@ function Games() {
                     }}
                   >
                     <button
-                      onClick={() => handleNavigation(`/games/${game.id}/play`)}
-                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium shadow-lg transform transition-all group-hover:scale-105"
+                      onClick={() => handleContinueGame(game.id, game.location)}
+                      disabled={capturingLocation === game.id}
+                      className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-3 rounded-lg font-medium shadow-lg transform transition-all group-hover:scale-105 disabled:transform-none disabled:cursor-not-allowed"
                     >
-                      Continue
+                      {capturingLocation === game.id ? (
+                        <span className="flex items-center gap-2">
+                          <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Capturing Location...
+                        </span>
+                      ) : (
+                        'Continue'
+                      )}
                     </button>
                     {/* Tooltip */}
                     <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-sm px-3 py-2 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10 shadow-lg">
