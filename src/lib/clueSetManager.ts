@@ -345,39 +345,46 @@ export async function createClueSet(options: CreateClueSetOptions) {
     };
     const generatedClues: GeneratedClue[] = await generateClues(params);
 
-    // Find the next hunt number for this stage
-    const existingHunts = await prisma.hunt.findMany({
-        where: { stageId },
-        select: { huntNumber: true },
-        orderBy: { huntNumber: 'desc' },
-        take: 1
-    });
-    const nextHuntNumber = existingHunts.length > 0 ? (existingHunts[0].huntNumber ?? 0) + 1 : 1;
+    try {
+        // Find the next hunt number for this stage
+        const existingHunts = await prisma.hunt.findMany({
+            where: { stageId },
+            select: { huntNumber: true },
+            orderBy: { huntNumber: 'desc' },
+            take: 1
+        });
+        const nextHuntNumber = existingHunts.length > 0 ? (existingHunts[0].huntNumber ?? 0) + 1 : 1;
 
-    // Create a hunt for this clue set and stage
-    const hunt = await prisma.hunt.create({
-        data: {
-            name: `${name} Hunt`,
-            description: `Hunt for ${name} (Level ${level}, Stage ${stage})`,
-            clueSetId: clueSet.id,
-            stageId: stageId,
-            huntNumber: nextHuntNumber
-        }
-    });
-
-    // Store generated clues
-    for (let i = 0; i < generatedClues.length; i++) {
-        await prisma.clue.create({
+        // Create a hunt for this clue set and stage
+        const hunt = await prisma.hunt.create({
             data: {
-                clueNumber: i + 1,
-                question: generatedClues[i].clue,
-                type: generatedClues[i].type,
-                huntId: hunt.id
+                name: `${name} Hunt`,
+                description: `Hunt for ${name} (Level ${level}, Stage ${stage})`,
+                clueSetId: clueSet.id,
+                stageId: stageId,
+                huntNumber: nextHuntNumber
             }
         });
-    }
 
-    return clueSet;
+        // Store generated clues
+        for (let i = 0; i < generatedClues.length; i++) {
+            await prisma.clue.create({
+                data: {
+                    clueNumber: i + 1,
+                    question: generatedClues[i].clue,
+                    type: generatedClues[i].type,
+                    huntId: hunt.id
+                }
+            });
+        }
+        return clueSet;
+    } catch (err: unknown) {
+        // Propagate OpenAI errors up
+        if (err instanceof Error) {
+            throw new Error('Failed to create hunt and clues: ' + err.message);
+        }
+        throw new Error('Failed to create hunt and clues: Unknown error');
+    }
 }
 
 /**

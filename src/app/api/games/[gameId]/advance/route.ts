@@ -20,7 +20,7 @@ export async function POST(
     const { prisma, verifyTokenAndUser, getTokenFromHeader } = await loadDependencies()
     const { gameId } = await params
     const authHeader = request.headers.get('authorization')
-    
+
     // Enhanced authentication
     const token = getTokenFromHeader(authHeader)
     if (!token) {
@@ -90,7 +90,7 @@ export async function POST(
 
     // 🔒 SECURITY: Server-side validation ONLY
     const canAdvance = validateAdvancement(participant, targetStage)
-    
+
     if (!canAdvance.allowed) {
       return NextResponse.json(
         { error: canAdvance.reason },
@@ -207,7 +207,7 @@ function validateAdvancement(
   // Additional validation: Check stage progression order
   const currentStage = participant.progress?.[0]?.currentStage || 0
   const currentLevel = participant.progress?.[0]?.currentLevel || 1
-  
+
   if (targetStage.level.levelNumber > currentLevel + 1) {
     return {
       allowed: false,

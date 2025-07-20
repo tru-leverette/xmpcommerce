@@ -209,12 +209,21 @@ export async function POST(
 
     } catch (error: unknown) {
         let message = 'Internal server error';
+        let details = '';
         if (error instanceof Error) {
             message = error.message;
-            console.error('Error in clue set test:', error.message);
+            details = error.stack || '';
+            // Log only non-OpenAI key errors to avoid leaking config
+            if (!message.includes('OpenAI API key')) {
+                console.error('Error in clue set test:', error);
+            }
         } else {
             console.error('Unknown error in clue set test:', error);
         }
-        return NextResponse.json({ error: message }, { status: 500 });
+        // If OpenAI key/config error, return 500 with clear message
+        if (message.includes('OpenAI API key')) {
+            return NextResponse.json({ error: message }, { status: 500 });
+        }
+        return NextResponse.json({ error: message, details }, { status: 500 });
     }
 }

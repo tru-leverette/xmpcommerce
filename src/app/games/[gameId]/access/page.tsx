@@ -62,12 +62,27 @@ interface Game {
     // Add other properties as needed
 }
 
+// Central error configuration
+const ERROR_CONFIG: Record<string, string> = {
+    LOCATION_REQUIRED: 'This game requires your location. Please enable location sharing in your browser settings and reload the page.',
+    NO_CLUES_AVAILABLE: 'No clues are available for your current location. Please wait for clues to be generated for your area, or try a different location.',
+    GEOGRAPHIC_RESTRICTION: 'You are not in the correct region for this game. Please check if there are games available in your area.',
+    PARTICIPANT_NOT_FOUND: 'You are not registered for this game. Please register to participate.',
+    PROGRESS_NOT_FOUND: 'No game progress found. Please contact support or try rejoining the game.',
+    CLUE_SET_ASSIGNMENT_FAILED: 'Failed to assign you to a clue set. Please try again or contact support.',
+    CLUE_NOT_FOUND: 'Clue not found. Please try another clue or contact support.',
+    AUTH_REQUIRED: 'Authentication error. Please log in again.',
+    AUTH_INVALID: 'Authentication error. Please log in again.',
+    INTERNAL_SERVER_ERROR: 'An internal server error occurred. Please try again later.'
+};
+
 export default function GameAccess() {
     const params = useParams();
     const gameId = params.gameId as string;
     const [userName, setUserName] = useState<string>("");
     const [gameLocation, setGameLocation] = useState<string>("");
     const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+    const [geoError, setGeoError] = useState<string | null>(null);
     const [gameCoords, setGameCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [gamePhase, setGamePhase] = useState<string | undefined>(undefined);
     const [showModal, setShowModal] = useState<boolean>(false);
@@ -79,35 +94,29 @@ export default function GameAccess() {
     const [cluesError, setCluesError] = useState<string | null>(null);
     const userContinentText = coords ? getContinent(coords.lat, coords.lng) : "(not available)";
 
+    // 1. Fetch user, game, and progress info on mount
     useEffect(() => {
-        const fetchData = async () => {
-            const token = localStorage.getItem("token");
-            // Fetch user profile
-            const userRes = await fetch("/api/user/profile", {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const userData = await userRes.json();
-            setUserName(userData.user?.username || "");
-
-            // Fetch game info
-            const gamesRes = await fetch("/api/games", {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            const gamesData = await gamesRes.json();
-            const game = gamesData.games?.find((g: Game) => g.id === gameId);
-            setGameLocation(game?.location || "");
-            setGamePhase(game?.phase);
-            if (game?.centerLatitude && game?.centerLongitude) {
-                setGameCoords({ lat: game.centerLatitude, lng: game.centerLongitude });
-            } else {
-                setGameCoords(null);
-            }
-
-            // Fetch user progress for this game
+        const fetchInitialData = async () => {
             try {
-                const progressRes = await fetch(`/api/games/${gameId}/progress`, {
-                    headers: { Authorization: `Bearer ${token}` }
-                });
+                const token = localStorage.getItem("token");
+                if (!token) return;
+                // User profile
+                const userRes = await fetch("/api/user/profile", { headers: { Authorization: `Bearer ${token}` } });
+                const userData = await userRes.json();
+                setUserName(userData.user?.username || "");
+                // Game info
+                const gamesRes = await fetch("/api/games", { headers: { Authorization: `Bearer ${token}` } });
+                const gamesData = await gamesRes.json();
+                const game = gamesData.games?.find((g: Game) => g.id === gameId);
+                setGameLocation(game?.location || "");
+                setGamePhase(game?.phase);
+                if (game?.centerLatitude && game?.centerLongitude) {
+                    setGameCoords({ lat: game.centerLatitude, lng: game.centerLongitude });
+                } else {
+                    setGameCoords(null);
+                }
+                // Progress
+                const progressRes = await fetch(`/api/games/${gameId}/progress`, { headers: { Authorization: `Bearer ${token}` } });
                 if (progressRes.ok) {
                     const progressData = await progressRes.json();
                     setProgress(progressData.progress || null);
@@ -117,73 +126,100 @@ export default function GameAccess() {
             } catch {
                 setProgress(null);
             }
+        };
+        fetchInitialData();
+    }, [gameId]);
 
-            // Get user coordinates
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    async (pos) => {
-                        const userLat = pos.coords.latitude;
-                        const userLng = pos.coords.longitude;
-                        setCoords({ lat: userLat, lng: userLng });
-                        // Fetch clue set for this location
-                        try {
-                            const clueSetRes = await fetch(`/api/games/${gameId}/clue-sets`, {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json",
-                                    Authorization: `Bearer ${token}`
-                                },
-                                body: JSON.stringify({ lat: userLat, lng: userLng, action: "test-assignment" })
-                            });
-                            const clueSetData = await clueSetRes.json();
-                            if (clueSetData.clueSet) {
-                                setClueSet(clueSetData.clueSet);
-                                // Fetch clues for this clueSet and current stage
-                                setCluesLoading(true);
-                                setCluesError(null);
-                                try {
-                                    // Use currentStage from progress if available
-                                    const stageId = progress?.currentStage;
-                                    if (stageId) {
-                                        const cluesRes = await fetch(`/api/games/${gameId}/clues?clueSetId=${clueSetData.clueSet.id}&stageId=${stageId}`, {
-                                            headers: { Authorization: `Bearer ${token}` }
-                                        });
-                                        const cluesData = await cluesRes.json();
-                                        if (cluesRes.ok && Array.isArray(cluesData.clues)) {
-                                            setClues(cluesData.clues);
-                                        } else {
-                                            setClues([]);
-                                            setCluesError(cluesData.error || 'No clues found.');
-                                        }
-                                    } else {
-                                        setClues([]);
-                                        setCluesError('No stage information available.');
-                                    }
-                                } catch {
-                                    setClues([]);
-                                    setCluesError('Failed to fetch clues.');
-                                } finally {
-                                    setCluesLoading(false);
-                                }
-                            } else {
-                                setClueSet(null);
-                                setClues([]);
-                            }
-                        } catch {
-                            setClueSet(null);
-                            setClues([]);
-                        }
-                    },
-                    () => {
+    // 2. Get user geolocation once on mount
+    useEffect(() => {
+        if (!coords && typeof window !== 'undefined' && navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const userLat = pos.coords.latitude;
+                    const userLng = pos.coords.longitude;
+                    if (userLat === 0 && userLng === 0) {
+                        setGeoError('Your device returned coordinates (0,0). Please ensure location services are enabled and try again.');
                         setCoords(null);
-                        setClueSet(null);
+                        return;
+                    }
+                    setCoords({ lat: userLat, lng: userLng });
+                    setGeoError(null);
+                },
+                (err) => {
+                    setCoords(null);
+                    if (err.code === 1) {
+                        setGeoError('Location permission denied. Please enable location sharing in your browser settings.');
+                    } else if (err.code === 2) {
+                        setGeoError('Location unavailable. Please check your device settings.');
+                    } else if (err.code === 3) {
+                        setGeoError('Location request timed out. Please try again.');
+                    } else {
+                        setGeoError('Failed to get your location.');
+                    }
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+            );
+        }
+    }, [coords]);
+
+    // 3. Fetch clue set and clues when coords, progress, or gameId changes
+    useEffect(() => {
+        const fetchClueSetAndClues = async () => {
+            if (!coords || !progress?.currentStage) return;
+            setCluesLoading(true);
+            setCluesError(null);
+            try {
+                const token = localStorage.getItem("token");
+                if (!token) throw new Error('AUTH_REQUIRED');
+                // Fetch clue set
+                const clueSetRes = await fetch(`/api/games/${gameId}/clue-sets`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`
                     },
-                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-                );
+                    body: JSON.stringify({ lat: coords.lat, lng: coords.lng, action: "test-assignment" })
+                });
+                const clueSetData = await clueSetRes.json();
+                if (clueSetData.clueSet) {
+                    setClueSet(clueSetData.clueSet);
+                    // Fetch clues
+                    const stageId = progress.currentStage;
+                    const cluesRes = await fetch(`/api/games/${gameId}/clues?clueSetId=${clueSetData.clueSet.id}&stageId=${stageId}&lat=${coords.lat}&lng=${coords.lng}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    const cluesData = await cluesRes.json();
+                    // Robustly handle both array and single clue object
+                    if (cluesRes.ok) {
+                        if (Array.isArray(cluesData.clues)) {
+                            setClues(cluesData.clues);
+                        } else if (cluesData.clue) {
+                            setClues([cluesData.clue]);
+                        } else {
+                            setClues([]);
+                            setCluesError(cluesData.error || 'No clues found.');
+                        }
+                    } else {
+                        setClues([]);
+                        setCluesError(cluesData.error || 'No clues found.');
+                    }
+                } else {
+                    setClueSet(null);
+                    setClues([]);
+                    setCluesError(clueSetData.error || 'CLUE_SET_ASSIGNMENT_FAILED');
+                }
+            } catch (err: unknown) {
+                setClueSet(null);
+                setClues([]);
+                if (typeof err === 'string') setCluesError(err);
+                else if (err instanceof Error) setCluesError(err.message);
+                else setCluesError('INTERNAL_SERVER_ERROR');
+            } finally {
+                setCluesLoading(false);
             }
         };
-        fetchData();
-    }, [gameId, progress?.currentStage]);
+        fetchClueSetAndClues();
+    }, [coords, progress?.currentStage, gameId]);
 
     // Show modal if user's continent does not match game location
     useEffect(() => {
@@ -302,8 +338,13 @@ export default function GameAccess() {
                         </div>
                     </div>
                 )}
+                {geoError && <div style={{ color: 'red', marginBottom: 8 }}>{geoError}</div>}
                 {cluesLoading && <div>Loading clues...</div>}
-                {cluesError && <div style={{ color: 'red' }}>{cluesError}</div>}
+                {cluesError && (
+                    <div style={{ color: 'red' }}>
+                        {ERROR_CONFIG[cluesError] || cluesError}
+                    </div>
+                )}
                 {clues.length > 0 && (
                     <div style={{ marginBottom: 12 }}>
                         <b>Clues:</b>
