@@ -250,7 +250,7 @@ export default function UserDashboard() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Current Games */}
-            <div className="bg-white rounded-lg shadow">
+            <div id="user-dashboard-games=widget" className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Your Games</h2>
               </div>
@@ -293,12 +293,20 @@ export default function UserDashboard() {
                               <span>Level {participation.progress[0].currentLevel} Stage {participation.progress[0].currentStage} Clue {participation.progress[0].currentClue}</span>
                             )}
                           </div>
-                          <Link
-                            href={`/games/${participation.game.id}/access`}
-                            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
-                          >
-                            Continue →
-                          </Link>
+                          <div className="flex items-center space-x-3">
+                            <Link
+                              href={`/games/${participation.game.id}/access`}
+                              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+                            >
+                              Continue →
+                            </Link>
+                            <Link
+                              href={`/user/games/${participation.game.id}`}
+                              className="text-gray-600 hover:text-blue-500 text-sm font-medium"
+                            >
+                              View Details
+                            </Link>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -318,7 +326,7 @@ export default function UserDashboard() {
             </div>
 
             {/* Recent Badges */}
-            <div className="bg-white rounded-lg shadow">
+            <div id="user-dashboard-badges=widget" className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Recent Badges</h2>
               </div>

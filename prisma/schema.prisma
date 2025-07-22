@@ -60,6 +60,7 @@ model Game {
   levels         Level[]
   participants   Participant[]
   clueSets       ClueSet[] // Geolocation-based clue sets
+  GameProgress   GameProgress?
 
   @@index([creatorId], map: "games_creatorId_fkey")
   @@map("games")
@@ -352,4 +353,14 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model GameProgress {
+  id        String   @id @default(uuid())
+  game      Game     @relation(fields: [gameId], references: [id])
+  gameId    String   @unique
+  phase     String
+  levelId   String?
+  stageId   String?
+  updatedAt DateTime @updatedAt
 }

@@ -7,6 +7,7 @@ import {
   type Location
 } from '@/lib/clueSetManager';
 import { prisma } from '@/lib/prisma';
+import { ClueType } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Centralized error configuration
@@ -321,11 +322,67 @@ export async function GET(
       try {
         const generatedHunts = await getCluesForClueSet(participant.clueSetId, currentStage.id);
         if (generatedHunts.length > 0) {
-          hunts = generatedHunts;
+          // Define explicit types for generated hunts and clues
+          interface GeneratedClue {
+            id: string;
+            clueNumber: number;
+            question: string;
+            type: string;
+            huntId: string;
+            createdAt?: string | Date;
+            updatedAt?: string | Date;
+            isActive?: boolean;
+            hint?: string | null;
+            answer?: string | null;
+            aiGenerated?: boolean;
+            requiredLatitude?: number | null;
+            requiredLongitude?: number | null;
+            locationRadius?: number | null;
+            aiContext?: unknown;
+          }
+          interface GeneratedHunt {
+            id: string;
+            name: string;
+            description: string | null;
+            clues: GeneratedClue[];
+            clueSetId?: string | null;
+            createdAt?: string | Date;
+            updatedAt?: string | Date;
+            stageId?: string;
+            huntNumber?: number;
+          }
+          hunts = (generatedHunts as GeneratedHunt[]).map((hunt) => ({
+            id: hunt.id,
+            name: hunt.name,
+            description: hunt.description ?? null,
+            clueSetId: hunt.clueSetId ?? null,
+            createdAt: hunt.createdAt ? new Date(hunt.createdAt) : new Date(),
+            updatedAt: hunt.updatedAt ? new Date(hunt.updatedAt) : new Date(),
+            stageId: hunt.stageId ?? currentStage?.id ?? '',
+            huntNumber: typeof hunt.huntNumber === 'number' ? hunt.huntNumber : 1,
+            clues: (hunt.clues || []).map((clue) => ({
+              id: clue.id,
+              clueNumber: clue.clueNumber,
+              question: clue.question,
+              type: clue.type as ClueType,
+              huntId: clue.huntId,
+              createdAt: clue.createdAt ? new Date(clue.createdAt) : new Date(),
+              updatedAt: clue.updatedAt ? new Date(clue.updatedAt) : new Date(),
+              isActive: typeof clue.isActive === 'boolean' ? clue.isActive : true,
+              hint: clue.hint ?? null,
+              answer: clue.answer ?? null,
+              aiGenerated: typeof clue.aiGenerated === 'boolean' ? clue.aiGenerated : false,
+              requiredLatitude: clue.requiredLatitude ?? null,
+              requiredLongitude: clue.requiredLongitude ?? null,
+              locationRadius: clue.locationRadius ?? null,
+              aiContext: clue.aiContext ?? null
+            }))
+          }));
         } else {
           throw new Error('Failed to generate clues');
         }
-      } catch {
+      } catch (err) {
+        // Robust error handling
         return NextResponse.json({
           error: 'NO_CLUES_AVAILABLE',
           message: 'No clues are available for your current location and clue generation failed.',
@@ -334,7 +391,8 @@ export async function GET(
           clue: null,
           totalClues: 0,
           isNoCluesAvailable: true,
-          suggestedAction: 'Please try again later or contact support.'
+          suggestedAction: 'Please try again later or contact support.',
+          details: process.env.NODE_ENV === 'development' ? (err instanceof Error ? err.message : err) : undefined
         }, { status: 200 });
       }
     }
