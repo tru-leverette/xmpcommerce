@@ -11,6 +11,53 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+// Modal component for avatar selection
+interface AvatarModalProps {
+  open: boolean;
+  onClose: () => void;
+  avatarOptions: string[];
+  selectedAvatar: string;
+  onSelect: (avatar: string) => void;
+  loading: boolean;
+}
+
+function AvatarModal({ open, onClose, avatarOptions, selectedAvatar, onSelect, loading }: AvatarModalProps) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+      <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full relative">
+        <button
+          onClick={onClose}
+          className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold"
+          aria-label="Close modal"
+        >
+          ×
+        </button>
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Change Avatar</h3>
+        {loading ? (
+          <div className="text-center text-gray-500">Loading avatars...</div>
+        ) : (
+          <div className="grid grid-cols-4 gap-4">
+            {avatarOptions.map((avatar) => (
+              <button
+                key={avatar}
+                type="button"
+                className={`rounded-full border-2 p-1 transition-all ${selectedAvatar === avatar ? 'border-black' : 'border-transparent'} hover:border-gray-400 bg-white`}
+                onClick={() => onSelect(avatar)}
+                aria-label={`Select avatar ${avatar}`}
+              >
+                <Image src={`/assets/avatars/${avatar}`} alt={avatar} width={64} height={64} className="object-cover w-16 h-16 rounded-full" />
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="mt-4 text-center">
+          <span className="text-gray-500 text-xs">Click an avatar to select. Your choice will be saved when you update your profile.</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface UserData {
   id: string;
@@ -40,6 +87,7 @@ export default function ProfilePage() {
   const [avatarOptions, setAvatarOptions] = useState<string[]>([]);
   const [avatarLoading, setAvatarLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
+  const [avatarModalOpen, setAvatarModalOpen] = useState(false);
   const router = useRouter()
 
   // Load avatar options from public/assets/avatars
@@ -63,7 +111,6 @@ export default function ProfilePage() {
     ]);
     setAvatarLoading(false);
   }, []);
-
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -203,17 +250,21 @@ export default function ProfilePage() {
       const data = await response.json()
 
       if (response.ok) {
-        setUser(data.user)
-        setEditing(false)
+        setUser(data.user);
+        // Save new token if provided
+        if (data.accessToken) {
+          localStorage.setItem('token', data.accessToken);
+        }
+        setEditing(false);
         setFormData(prev => ({
           ...prev,
           currentPassword: '',
           newPassword: '',
           confirmPassword: ''
-        }))
-        showToast.success('Profile updated successfully!')
+        }));
+        showToast.success('Profile updated successfully!');
       } else {
-        showToast.error(data.error || 'Failed to update profile')
+        showToast.error(data.error || 'Failed to update profile');
       }
     } catch (error) {
       console.error('Error updating profile:', error)
@@ -283,295 +334,218 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Profile Settings</h1>
           <p className="text-gray-500 mb-8">Manage your account information and preferences</p>
 
-          {/* Top Section: Profile Overview and Avatar Selection */}
-          <div className="grid md:grid-cols-2 gap-8 mb-8">
-            {/* Profile Overview Card */}
+          {/* Profile Overview and Account Information in the same card */}
+          <div className="mb-8">
             <div className="bg-gray-900 rounded-lg shadow p-6 text-white">
-              <div className="text-center">
-                <div className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-gray-700 bg-gray-800 flex items-center justify-center overflow-hidden">
-                  {user?.avatar ? (
-                    <Image src={`/assets/avatars/${user.avatar}`} alt="Avatar" width={96} height={96} className="object-cover w-24 h-24" />
-                  ) : (
-                    <span className="text-3xl font-bold text-white">
-                      {user?.username?.charAt(0).toUpperCase() || 'U'}
-                    </span>
-                  )}
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                <div className="text-center md:text-left md:flex md:items-center">
+                  <button
+                    type="button"
+                    className="w-24 h-24 rounded-full mx-auto md:mx-0 mb-4 md:mb-0 border-4 border-gray-700 bg-gray-800 flex items-center justify-center overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onClick={() => setAvatarModalOpen(true)}
+                    aria-label="Change avatar"
+                  >
+                    {user?.avatar ? (
+                      <Image src={`/assets/avatars/${user.avatar}`} alt="Avatar" width={96} height={96} className="object-cover w-24 h-24" />
+                    ) : (
+                      <span className="text-3xl font-bold text-white">
+                        {user?.username?.charAt(0).toUpperCase() || 'U'}
+                      </span>
+                    )}
+                  </button>
+                  <div className="md:ml-6">
+                    <h3 className="text-xl font-semibold text-white">{user?.username}</h3>
+                    <p className="text-gray-300">{user?.email}</p>
+                    <div className="flex space-x-2 mt-4">
+                      <span className={getRoleBadge(user?.role || 'USER') + ' bg-gray-700 text-white'}>
+                        {user?.role}
+                      </span>
+                      <span className={getStatusBadge(user?.status || 'ACTIVE') + ' bg-gray-700 text-white'}>
+                        {user?.status}
+                      </span>
+                      <span className="px-3 py-1 text-sm font-medium rounded-full bg-gray-700 text-white">
+                        VERIFIED
+                      </span>
+                    </div>
+                    <div className="mt-4 text-sm text-gray-400">
+                      Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
+                    </div>
+                  </div>
                 </div>
-                <h3 className="text-xl font-semibold text-white">{user?.username}</h3>
-                <p className="text-gray-300">{user?.email}</p>
-                <div className="flex justify-center space-x-2 mt-4">
-                  <span className={getRoleBadge(user?.role || 'USER') + ' bg-gray-700 text-white'}>
-                    {user?.role}
-                  </span>
-                  <span className={getStatusBadge(user?.status || 'ACTIVE') + ' bg-gray-700 text-white'}>
-                    {user?.status}
-                  </span>
-                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-gray-700 text-white">
-                    VERIFIED
-                  </span>
+                <div className="mt-6 md:mt-0 md:ml-8 flex-shrink-0">
+                  <div className="flex space-x-2">
+                    {!editing ? (
+                      <button
+                        onClick={() => setEditing(true)}
+                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        Edit Profile
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={handleCancel}
+                          className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleSave}
+                          disabled={saving}
+                          className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                          {saving ? 'Saving...' : 'Save Changes'}
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <div className="mt-4 text-sm text-gray-400">
-                  Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
-                </div>
               </div>
             </div>
-            {/* Avatar Selection Card */}
-            <div className="bg-gray-100 rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Change Avatar</h3>
-              {avatarLoading ? (
-                <div className="text-center text-gray-500">Loading avatars...</div>
-              ) : (
-                <div className="grid grid-cols-4 gap-4">
-                  {avatarOptions.map((avatar) => (
-                    <button
-                      key={avatar}
-                      type="button"
-                      className={`rounded-full border-2 p-1 transition-all ${formData.avatar === avatar ? 'border-black' : 'border-transparent'} hover:border-gray-400 bg-white`}
-                      onClick={() => setFormData((prev) => ({ ...prev, avatar }))}
-                      aria-label={`Select avatar ${avatar}`}
-                    >
-                      <Image src={`/assets/avatars/${avatar}`} alt={avatar} width={64} height={64} className="object-cover w-16 h-16 rounded-full" />
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="mt-4 text-center">
-                <span className="text-gray-500 text-xs">Click an avatar to select. Your choice will be saved when you update your profile.</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Additional Profile Card - SUPERADMIN Example */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="text-center">
-              <div className="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="text-2xl font-bold text-white">S</span>
-              </div>
-              <h3 className="text-xl font-semibold text-gray-900">SuperAdmin</h3>
-              <p className="text-gray-600">admin@xmpcommerce.com</p>
-
-              <div className="flex justify-center space-x-2 mt-4">
-                <span className="px-3 py-1 text-sm font-medium rounded-full bg-purple-100 text-purple-800">
-                  SUPERADMIN
-                </span>
-                <span className="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">
-                  ACTIVE
-                </span>
-              </div>
-
-              <div className="mt-4 text-sm text-gray-500">
-                Member since January 1, 2025
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Profile Summary Section */}
-        <div className="grid md:grid-cols-2 gap-8 mb-8">
-          {/* Profile Form Card */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Profile Summary</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Username
-                </label>
-                <p className="text-gray-900">{user?.username}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <p className="text-gray-900">{user?.email}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Account Status
-                </label>
-                <p className="text-gray-900">{user?.status}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Role
-                </label>
-                <p className="text-gray-900">{user?.role}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Additional Profile Summary */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Admin Profile</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Username
-                </label>
-                <p className="text-gray-900">SuperAdmin</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <p className="text-gray-900">admin@xmpcommerce.com</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Account Status
-                </label>
-                <p className="text-gray-900">ACTIVE</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Role
-                </label>
-                <p className="text-gray-900">SUPERADMIN</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Verification Status
-                </label>
-                <p className="text-gray-900">VERIFIED</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom Section: Account Information Form */}
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-gray-900">Account Information</h2>
-            {!editing ? (
-              <button
-                onClick={() => setEditing(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Edit Profile
-              </button>
-            ) : (
-              <div className="flex space-x-2">
-                <button
-                  onClick={handleCancel}
-                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                >
-                  {saving ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="p-6 space-y-6">
-            {/* Username */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Username
-              </label>
-              {editing ? (
-                <div>
-                  <input
-                    type="text"
-                    name="username"
-                    value={formData.username}
-                    onChange={handleInputChange}
-                    disabled={true}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed focus:outline-none"
-                  />
-                  <p className="text-gray-500 text-sm mt-1">
-                    Username cannot be changed as it must remain unique across all users.
-                  </p>
-                  {errors.username && (
-                    <p className="text-red-500 text-sm mt-1">{errors.username}</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-gray-900">{user?.username}</p>
-              )}
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
-              </label>
-              {editing ? (
-                <div>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  {errors.email && (
-                    <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-gray-900">{user?.email}</p>
-              )}
-            </div>
-
-            {/* Password Change Section - Only shown when editing */}
+            {/* Avatar Modal rendered outside the card, but inside the main section */}
+            <AvatarModal
+              open={avatarModalOpen}
+              onClose={() => setAvatarModalOpen(false)}
+              avatarOptions={avatarOptions}
+              selectedAvatar={formData.avatar}
+              onSelect={async (avatar: string) => {
+                setFormData((prev) => ({ ...prev, avatar }));
+                setUser((prev) => prev ? { ...prev, avatar } : prev);
+                setAvatarModalOpen(false);
+                try {
+                  const token = localStorage.getItem('token');
+                  if (!token) {
+                    showToast.error('Not authenticated.');
+                    return;
+                  }
+                  const response = await fetch('/api/user/profile', {
+                    method: 'PUT',
+                    headers: {
+                      'Authorization': `Bearer ${token}`,
+                      'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                      email: formData.email,
+                      avatar,
+                    }),
+                  });
+                  const data = await response.json();
+                  if (response.ok) {
+                    setUser(data.user);
+                    setFormData((prev) => ({ ...prev, avatar: data.user.avatar }));
+                    if (data.accessToken) {
+                      localStorage.setItem('token', data.accessToken);
+                    }
+                    showToast.success('Avatar updated successfully!');
+                  } else {
+                    showToast.error(data.error || 'Failed to update avatar');
+                  }
+                } catch (error) {
+                  console.error('Error updating avatar:', error);
+                  showToast.error('Error updating avatar');
+                }
+              }}
+              loading={avatarLoading}
+            />
+            {/* Edit Form appears below the card when editing */}
             {editing && (
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
-                <div className="space-y-4">
+              <div className="bg-white rounded-lg shadow mt-6 p-6">
+                {/* Username */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Username
+                  </label>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Current Password
-                    </label>
                     <input
-                      type="password"
-                      name="currentPassword"
-                      value={formData.currentPassword}
+                      type="text"
+                      name="username"
+                      value={formData.username}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter current password to change"
+                      disabled={true}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed focus:outline-none"
                     />
-                    {errors.currentPassword && (
-                      <p className="text-red-500 text-sm mt-1">{errors.currentPassword}</p>
+                    <p className="text-gray-500 text-sm mt-1">
+                      Username cannot be changed as it must remain unique across all users.
+                    </p>
+                    {errors.username && (
+                      <p className="text-red-500 text-sm mt-1">{errors.username}</p>
                     )}
                   </div>
+                </div>
 
+                {/* Email */}
+                <div className="mt-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Email Address
+                  </label>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      New Password
-                    </label>
                     <input
-                      type="password"
-                      name="newPassword"
-                      value={formData.newPassword}
+                      type="email"
+                      name="email"
+                      value={formData.email}
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter new password (optional)"
                     />
-                    {errors.newPassword && (
-                      <p className="text-red-500 text-sm mt-1">{errors.newPassword}</p>
+                    {errors.email && (
+                      <p className="text-red-500 text-sm mt-1">{errors.email}</p>
                     )}
                   </div>
+                </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Confirm New Password
-                    </label>
-                    <input
-                      type="password"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Confirm new password"
-                    />
-                    {errors.confirmPassword && (
-                      <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>
-                    )}
+                {/* Password Change Section - Only shown when editing */}
+                <div className="border-t pt-6 mt-6">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Current Password
+                      </label>
+                      <input
+                        type="password"
+                        name="currentPassword"
+                        value={formData.currentPassword}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter current password to change"
+                      />
+                      {errors.currentPassword && (
+                        <p className="text-red-500 text-sm mt-1">{errors.currentPassword}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        name="newPassword"
+                        value={formData.newPassword}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Enter new password (optional)"
+                      />
+                      {errors.newPassword && (
+                        <p className="text-red-500 text-sm mt-1">{errors.newPassword}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Confirm New Password
+                      </label>
+                      <input
+                        type="password"
+                        name="confirmPassword"
+                        value={formData.confirmPassword}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Confirm new password"
+                      />
+                      {errors.confirmPassword && (
+                        <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

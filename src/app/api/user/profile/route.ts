@@ -1,4 +1,4 @@
-import { verifyToken } from '@/lib/auth'
+import { JWTPayload, verifyToken } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -77,7 +77,7 @@ export async function PUT(request: NextRequest) {
 
     const decoded = verifyToken(token)
     const body = await request.json()
-    const { email, currentPassword, newPassword } = body
+    const { email, currentPassword, newPassword, avatar } = body
 
     // Validate required fields
     if (!email) {
@@ -122,6 +122,9 @@ export async function PUT(request: NextRequest) {
     } = {
       email
     }
+    if (typeof avatar === 'string') {
+      updateData.avatar = avatar;
+    }
 
     // Handle password change
     if (newPassword) {
@@ -161,8 +164,19 @@ export async function PUT(request: NextRequest) {
       }
     })
 
+    // Issue a new JWT with updated user info
+    const { generateToken } = await import('@/lib/auth');
+    const newToken = generateToken({
+      userId: updatedUser.id,
+      email: updatedUser.email,
+      username: updatedUser.username || '',
+      role: updatedUser.role as 'USER' | 'ADMIN' | 'SUPERADMIN',
+      avatar: updatedUser.avatar || ''
+    } as JWTPayload & { avatar: string });
+
     return NextResponse.json({
       user: updatedUser,
+      accessToken: newToken,
       message: 'Profile updated successfully'
     })
 

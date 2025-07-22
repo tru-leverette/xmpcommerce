@@ -14,6 +14,7 @@ export interface JWTPayload {
   email: string;
   username: string;
   role: 'USER' | 'ADMIN' | 'SUPERADMIN';
+  avatar?: string;
   type?: 'access' | 'refresh'; // Token type
   iat?: number; // Issued at timestamp
   exp?: number; // Expiration timestamp

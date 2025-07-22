@@ -1,5 +1,7 @@
 'use client'
 
+
+import { useAuth } from '@/lib/AuthContext'
 import { useTabSecurity } from '@/lib/hooks/useTabSecurity'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -7,111 +9,28 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 
 export default function Navigation() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [userName, setUserName] = useState<string>('')
-  const [mounted, setMounted] = useState(false)
-  const [showDropdown, setShowDropdown] = useState(false)
-  const router = useRouter()
-  const pathname = usePathname()
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
-  // Add tab security monitoring at component level
-  useTabSecurity()
+  const { user, isAuthenticated, isLoading } = useAuth();
+  const [mounted, setMounted] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  useTabSecurity();
 
   useEffect(() => {
-    setMounted(true)
-
-    const checkAuth = () => {
-      // Check if user is authenticated
-      const token = localStorage.getItem('token')
-      if (token) {
-        setIsAuthenticated(true)
-
-        // Try to decode JWT token to get user info
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]))
-          setUserRole(payload.role || 'USER')
-          setUserName(payload.username || payload.email || 'User')
-          console.log('User role from token:', payload.role)
-        } catch {
-          // If token parsing fails, treat as unauthenticated
-          setIsAuthenticated(false)
-          setUserRole(null)
-          setUserName('')
-          console.log('Token parsing failed - user unauthenticated')
-        }
-      } else {
-        setIsAuthenticated(false)
-        setUserRole(null)
-        setUserName('')
-      }
-    }
-
-    // Initial check
-    checkAuth()
-
-    // Listen for storage changes (when login/logout happens in the same tab)
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'token') {
-        checkAuth()
-      }
-    }
-
-    // Listen for custom events (for same-tab login/logout)
-    const handleAuthChange = () => {
-      checkAuth()
-    }
-
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('authChange', handleAuthChange)
-
-    // Close dropdown when clicking outside
+    setMounted(true);
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false)
+        setShowDropdown(false);
       }
-    }
-
-    document.addEventListener('mousedown', handleClickOutside)
-
+    };
+    document.addEventListener('mousedown', handleClickOutside);
     return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('authChange', handleAuthChange)
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [])
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
-  // Check auth state when pathname changes (route navigation)
-  useEffect(() => {
-    const checkAuth = () => {
-      const token = localStorage.getItem('token')
-      if (token) {
-        setIsAuthenticated(true)
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]))
-          setUserRole(payload.role || 'USER')
-          setUserName(payload.username || payload.email || 'User')
-        } catch {
-          const storedUser = localStorage.getItem('user')
-          if (storedUser) {
-            const userData = JSON.parse(storedUser)
-            setUserRole(userData.role || 'USER')
-            setUserName(userData.username || userData.email || 'User')
-          } else {
-            setUserRole('SUPERADMIN')
-            setUserName('Admin User')
-          }
-        }
-      } else {
-        setIsAuthenticated(false)
-        setUserRole(null)
-        setUserName('')
-      }
-    }
-
-    checkAuth()
-  }, [pathname]) // Re-run when route changes
+  // No need to check auth state on route change, handled by context
 
   const handleLogout = async () => {
     const token = localStorage.getItem('token')
@@ -133,9 +52,7 @@ export default function Navigation() {
     }
 
     localStorage.removeItem('token')
-    setIsAuthenticated(false)
-    setUserRole(null)
-    setUserName('')
+    // No longer needed, handled by context
     setShowDropdown(false)
 
     // Dispatch custom event to notify other components
@@ -149,44 +66,17 @@ export default function Navigation() {
   }
 
   const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase()
-  }
+    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  };
 
   // Prevent hydration mismatch by not rendering auth-dependent content until mounted
-  if (!mounted) {
-    return (
-      <nav className="bg-white shadow-lg relative z-50">
-        <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center py-4">
-            {/* Logo */}
-            <Link href="/" className="flex items-center">
-              <Image
-                src="/parrot_logo.png"
-                alt="Scavenger Hunt Logo"
-                width={250}
-                height={80}
-                style={{ width: 'auto', height: '80px' }}
-                priority
-              />
-            </Link>
-
-            {/* Navigation Links - skeleton while loading */}
-            <div className="flex items-center space-x-6">
-              <Link href="/games" className="text-gray-700 hover:text-blue-600">
-                Games
-              </Link>
-              <div className="w-16 h-8 bg-gray-200 rounded animate-pulse"></div>
-              <div className="w-20 h-8 bg-gray-200 rounded animate-pulse"></div>
-            </div>
-          </div>
-        </div>
-      </nav>
-    )
+  if (!mounted || isLoading) {
+    return null;
   }
 
   // Don't render navigation on home page
   if (pathname === '/') {
-    return null
+    return null;
   }
 
   return (
@@ -244,17 +134,28 @@ export default function Navigation() {
                 <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={toggleDropdown}
-                    className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 overflow-hidden"
+                    aria-label="User menu"
                   >
-                    <span className="text-sm font-medium">
-                      {getInitials(userName || 'User')}
-                    </span>
+                    {user?.avatar ? (
+                      <Image
+                        src={`/assets/avatars/${user.avatar}`}
+                        alt="Avatar"
+                        width={40}
+                        height={40}
+                        className="object-cover w-10 h-10 rounded-full"
+                      />
+                    ) : (
+                      <span className="text-sm font-medium">
+                        {getInitials(user?.username || user?.email || 'User')}
+                      </span>
+                    )}
                   </button>
 
                   {/* Dropdown Menu */}
                   {showDropdown && (
                     <div id="navigation-icon-dropdown" className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50 border border-gray-200">
-                      {(userRole === 'ADMIN' || userRole === 'SUPERADMIN') && (
+                      {(user?.role === 'ADMIN' || user?.role === 'SUPERADMIN') && (
                         <Link
                           href="/admin"
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"

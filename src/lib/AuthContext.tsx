@@ -1,13 +1,14 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation';
+import { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
 interface User {
-  id: string
-  email: string
-  username: string
-  role: string
+  id: string;
+  email: string;
+  username: string;
+  role: string;
+  avatar?: string;
 }
 
 interface AuthContextType {
@@ -39,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshAccessToken = useCallback(async (): Promise<boolean> => {
     try {
       const refreshToken = localStorage.getItem('refreshToken')
-      
+
       if (!refreshToken) {
         console.warn('No refresh token found')
         return false
@@ -59,11 +60,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json()
-      
+
       // Store the new access token
       localStorage.setItem('token', data.accessToken)
       authCache.isValid = false // Reset cache for new token
-      
+
       console.log('Access token refreshed successfully')
       return true
 
@@ -76,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const verifyAuth = useCallback(async (requiredRole: string[] = []): Promise<boolean> => {
     try {
       let token = localStorage.getItem('token')
-      
+
       if (!token) {
         console.warn('No token found')
         setIsAuthenticated(false)
@@ -97,12 +98,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Parse user from token for basic info (optimization)
       try {
         const payload = JSON.parse(atob(token.split('.')[1]))
-        const userData = {
+        const userData: User = {
           id: payload.userId,
           email: payload.email,
           username: payload.username || payload.email.split('@')[0],
-          role: payload.role
-        }
+          role: payload.role,
+          avatar: payload.avatar || '',
+        };
         setUser(userData)
 
         // Check role requirements from token
@@ -122,8 +124,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Only make API call for verification if cache is invalid
       console.log('Making single auth verification API call')
-      const testEndpoint = requiredRole.includes('ADMIN') || requiredRole.includes('SUPERADMIN') 
-        ? '/api/admin/users' 
+      const testEndpoint = requiredRole.includes('ADMIN') || requiredRole.includes('SUPERADMIN')
+        ? '/api/admin/users'
         : '/api/user/profile'
 
       let response = await fetch(testEndpoint, {
@@ -136,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.status === 401) {
         console.log('Access token expired, attempting refresh...')
         const refreshSuccess = await refreshAccessToken()
-        
+
         if (refreshSuccess) {
           // Retry with the new token
           const newToken = localStorage.getItem('token')!
