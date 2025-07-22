@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server'
 import { verifyToken } from '@/lib/auth'
 import bcrypt from 'bcryptjs'
+import { NextRequest, NextResponse } from 'next/server'
 
 function getTokenFromHeader(authHeader: string | null): string | null {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -13,10 +13,10 @@ export async function GET(request: NextRequest) {
   try {
     // Import prisma dynamically to avoid build-time database connection issues
     const { prisma } = await import('@/lib/prisma')
-    
+
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
-    
+
     if (!token) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
         id: true,
         email: true,
         username: true,
+        avatar: true,
         role: true,
         status: true,
         createdAt: true
@@ -63,10 +64,10 @@ export async function PUT(request: NextRequest) {
   try {
     // Import prisma dynamically to avoid build-time database connection issues
     const { prisma } = await import('@/lib/prisma')
-    
+
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
-    
+
     if (!token) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -117,6 +118,7 @@ export async function PUT(request: NextRequest) {
     const updateData: {
       email: string;
       password?: string;
+      avatar?: string;
     } = {
       email
     }
@@ -152,6 +154,7 @@ export async function PUT(request: NextRequest) {
         id: true,
         email: true,
         username: true,
+        avatar: true,
         role: true,
         status: true,
         createdAt: true

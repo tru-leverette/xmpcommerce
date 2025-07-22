@@ -14,9 +14,9 @@ const loadDependencies = async () => {
 export async function POST(request: NextRequest) {
   try {
     const { prisma, hashPassword, generateToken } = await loadDependencies()
-    
+
     console.log('=== REGISTRATION REQUEST START ===')
-    
+
     const { email, username, password } = await request.json()
     console.log('Request data:', { email, username, passwordLength: password?.length })
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     console.log('Hashing password...')
     const hashedPassword = await hashPassword(password)
     console.log('Password hashed successfully')
-    
+
     console.log('Creating user in database...')
     const user = await prisma.user.create({
       data: {
@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
     const token = generateToken({
       userId: user.id,
       email: user.email,
+      username: user.username,
       role: user.role
     })
     console.log('JWT token generated successfully')

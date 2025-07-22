@@ -40,7 +40,7 @@ const ParamsSchema = z.object({
     gameId: z.string().min(1)
 });
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest, { params }: { params: { gameId: string } }) {
     try {
         const authHeader = req.headers.get('authorization');
         const token = getTokenFromHeader(authHeader);
@@ -51,13 +51,7 @@ export async function GET(req: NextRequest) {
         if (!user?.userId) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        // Extract gameId from the URL
-        const url = req.nextUrl;
-        const gameId = url.pathname.split('/').filter(Boolean).pop();
-        if (!gameId || typeof gameId !== 'string') {
-            return NextResponse.json({ error: 'Invalid gameId' }, { status: 400 });
-        }
-        ParamsSchema.parse({ gameId });
+        const { gameId } = ParamsSchema.parse(params);
 
         // Find participant for this user and game
         const participant = await prisma.participant.findUnique({

@@ -1,18 +1,28 @@
+
+
 'use client'
+
+
+
 
 import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
 import { showToast } from '@/lib/toast'
+import Image from 'next/image'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 interface UserData {
-  id: string
-  email: string
-  username: string
-  role: string
-  status: string
-  createdAt: string
+  id: string;
+  email: string;
+  username: string;
+  avatar?: string;
+  role: string;
+  status: string;
+  createdAt: string;
 }
+
+
 
 export default function ProfilePage() {
   const [user, setUser] = useState<UserData | null>(null)
@@ -22,12 +32,37 @@ export default function ProfilePage() {
   const [formData, setFormData] = useState({
     username: '',
     email: '',
+    avatar: '',
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   })
+  const [avatarOptions, setAvatarOptions] = useState<string[]>([]);
+  const [avatarLoading, setAvatarLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const router = useRouter()
+
+  // Load avatar options from public/assets/avatars
+  useEffect(() => {
+    setAvatarLoading(true);
+    // List of avatars is static, hardcode for now (could fetch from API if needed)
+    setAvatarOptions([
+      'pirate ship_dinghy.png',
+      'pirate_anchor.png',
+      'pirate_bottle_message.png',
+      'pirate_man_1.png',
+      'pirate_man_2.png',
+      'pirate_mermaid.png',
+      'pirate_parrot.png',
+      'pirate_treasure - Copy.png',
+      'pirate_treasure.png',
+      'pirate_woman_1.png',
+      'pirate_woman_2.png',
+      'pirate_woman_3 - Copy.png',
+      'pirate_woman_3.png',
+    ]);
+    setAvatarLoading(false);
+  }, []);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,10 +76,11 @@ export default function ProfilePage() {
         // Try to get user data from token first (optimization)
         try {
           const payload = JSON.parse(atob(token.split('.')[1]))
-          const userData = {
+          const userData: UserData = {
             id: payload.userId,
             email: payload.email,
             username: payload.username || payload.email.split('@')[0],
+            avatar: payload.avatar || '',
             role: payload.role,
             status: 'ACTIVE', // Default from token
             createdAt: new Date().toISOString() // Approximate
@@ -53,6 +89,7 @@ export default function ProfilePage() {
           setFormData({
             username: userData.username,
             email: userData.email,
+            avatar: userData.avatar || '',
             currentPassword: '',
             newPassword: '',
             confirmPassword: ''
@@ -76,6 +113,7 @@ export default function ProfilePage() {
           setFormData({
             username: data.user.username,
             email: data.user.email,
+            avatar: data.user.avatar || '',
             currentPassword: '',
             newPassword: '',
             confirmPassword: ''
@@ -89,7 +127,6 @@ export default function ProfilePage() {
         setLoading(false)
       }
     }
-
     fetchData()
   }, [router])
 
@@ -141,10 +178,12 @@ export default function ProfilePage() {
       const token = localStorage.getItem('token')
       const updateData: {
         email: string;
+        avatar: string;
         currentPassword?: string;
         newPassword?: string;
       } = {
-        email: formData.email
+        email: formData.email,
+        avatar: formData.avatar
       }
 
       if (formData.newPassword) {
@@ -189,6 +228,7 @@ export default function ProfilePage() {
     setFormData({
       username: user?.username || '',
       email: user?.email || '',
+      avatar: user?.avatar || '',
       currentPassword: '',
       newPassword: '',
       confirmPassword: ''
@@ -228,287 +268,314 @@ export default function ProfilePage() {
 
   return (
     <ProtectedRouteGuard>
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="min-h-screen bg-white text-black">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header */}
-          <div className="mb-8">
-            <button
-              onClick={() => router.back()}
-              className="text-blue-600 hover:text-blue-500 font-medium mb-4"
-            >
-              ← Back
-            </button>
-            <h1 className="text-3xl font-bold text-gray-900">Profile Settings</h1>
-            <p className="text-gray-600 mt-2">Manage your account information and preferences</p>
-          </div>
+          {/* Breadcrumbs */}
+          <nav className="mb-8 text-sm text-gray-500" aria-label="Breadcrumb">
+            <ol className="list-none p-0 inline-flex">
+              <li className="flex items-center">
+                <Link href="/dashboard" className="hover:underline text-gray-700">Dashboard</Link>
+                <span className="mx-2">/</span>
+              </li>
+              <li className="flex items-center text-gray-900 font-semibold">Profile</li>
+            </ol>
+          </nav>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Profile Settings</h1>
+          <p className="text-gray-500 mb-8">Manage your account information and preferences</p>
 
-          {/* Top Section: Profile Overview and Profile Form */}
+          {/* Top Section: Profile Overview and Avatar Selection */}
           <div className="grid md:grid-cols-2 gap-8 mb-8">
             {/* Profile Overview Card */}
-            <div className="bg-white rounded-lg shadow p-6">
+            <div className="bg-gray-900 rounded-lg shadow p-6 text-white">
               <div className="text-center">
-                <div className="w-20 h-20 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl font-bold text-white">
-                    {user?.username?.charAt(0).toUpperCase() || 'U'}
-                  </span>
+                <div className="w-24 h-24 rounded-full mx-auto mb-4 border-4 border-gray-700 bg-gray-800 flex items-center justify-center overflow-hidden">
+                  {user?.avatar ? (
+                    <Image src={`/assets/avatars/${user.avatar}`} alt="Avatar" width={96} height={96} className="object-cover w-24 h-24" />
+                  ) : (
+                    <span className="text-3xl font-bold text-white">
+                      {user?.username?.charAt(0).toUpperCase() || 'U'}
+                    </span>
+                  )}
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900">{user?.username}</h3>
-                <p className="text-gray-600">{user?.email}</p>
-
+                <h3 className="text-xl font-semibold text-white">{user?.username}</h3>
+                <p className="text-gray-300">{user?.email}</p>
                 <div className="flex justify-center space-x-2 mt-4">
-                  <span className={getRoleBadge(user?.role || 'USER')}>
+                  <span className={getRoleBadge(user?.role || 'USER') + ' bg-gray-700 text-white'}>
                     {user?.role}
                   </span>
-                  <span className={getStatusBadge(user?.status || 'ACTIVE')}>
+                  <span className={getStatusBadge(user?.status || 'ACTIVE') + ' bg-gray-700 text-white'}>
                     {user?.status}
                   </span>
-                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-blue-100 text-blue-800">
+                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-gray-700 text-white">
                     VERIFIED
                   </span>
                 </div>
-
-                <div className="mt-4 text-sm text-gray-500">
+                <div className="mt-4 text-sm text-gray-400">
                   Member since {user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown'}
                 </div>
               </div>
             </div>
-
-            {/* Additional Profile Card - SUPERADMIN Example */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <div className="text-center">
-                <div className="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="text-2xl font-bold text-white">S</span>
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900">SuperAdmin</h3>
-                <p className="text-gray-600">admin@xmpcommerce.com</p>
-
-                <div className="flex justify-center space-x-2 mt-4">
-                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-purple-100 text-purple-800">
-                    SUPERADMIN
-                  </span>
-                  <span className="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">
-                    ACTIVE
-                  </span>
-                </div>
-
-                <div className="mt-4 text-sm text-gray-500">
-                  Member since January 1, 2025
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Profile Summary Section */}
-          <div className="grid md:grid-cols-2 gap-8 mb-8">
-            {/* Profile Form Card */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Profile Summary</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Username
-                  </label>
-                  <p className="text-gray-900">{user?.username}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address
-                  </label>
-                  <p className="text-gray-900">{user?.email}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Account Status
-                  </label>
-                  <p className="text-gray-900">{user?.status}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Role
-                  </label>
-                  <p className="text-gray-900">{user?.role}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Additional Profile Summary */}
-            <div className="bg-white rounded-lg shadow p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Admin Profile</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Username
-                  </label>
-                  <p className="text-gray-900">SuperAdmin</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Email Address
-                  </label>
-                  <p className="text-gray-900">admin@xmpcommerce.com</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Account Status
-                  </label>
-                  <p className="text-gray-900">ACTIVE</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Role
-                  </label>
-                  <p className="text-gray-900">SUPERADMIN</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Verification Status
-                  </label>
-                  <p className="text-gray-900">VERIFIED</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Section: Account Information Form */}
-          <div className="bg-white rounded-lg shadow">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-gray-900">Account Information</h2>
-              {!editing ? (
-                <button
-                  onClick={() => setEditing(true)}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Edit Profile
-                </button>
+            {/* Avatar Selection Card */}
+            <div className="bg-gray-100 rounded-lg shadow p-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Change Avatar</h3>
+              {avatarLoading ? (
+                <div className="text-center text-gray-500">Loading avatars...</div>
               ) : (
-                <div className="flex space-x-2">
-                  <button
-                    onClick={handleCancel}
-                    className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? 'Saving...' : 'Save Changes'}
-                  </button>
+                <div className="grid grid-cols-4 gap-4">
+                  {avatarOptions.map((avatar) => (
+                    <button
+                      key={avatar}
+                      type="button"
+                      className={`rounded-full border-2 p-1 transition-all ${formData.avatar === avatar ? 'border-black' : 'border-transparent'} hover:border-gray-400 bg-white`}
+                      onClick={() => setFormData((prev) => ({ ...prev, avatar }))}
+                      aria-label={`Select avatar ${avatar}`}
+                    >
+                      <Image src={`/assets/avatars/${avatar}`} alt={avatar} width={64} height={64} className="object-cover w-16 h-16 rounded-full" />
+                    </button>
+                  ))}
                 </div>
               )}
+              <div className="mt-4 text-center">
+                <span className="text-gray-500 text-xs">Click an avatar to select. Your choice will be saved when you update your profile.</span>
+              </div>
             </div>
+          </div>
 
-            <div className="p-6 space-y-6">
-              {/* Username */}
+          {/* Additional Profile Card - SUPERADMIN Example */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-center">
+              <div className="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-2xl font-bold text-white">S</span>
+              </div>
+              <h3 className="text-xl font-semibold text-gray-900">SuperAdmin</h3>
+              <p className="text-gray-600">admin@xmpcommerce.com</p>
+
+              <div className="flex justify-center space-x-2 mt-4">
+                <span className="px-3 py-1 text-sm font-medium rounded-full bg-purple-100 text-purple-800">
+                  SUPERADMIN
+                </span>
+                <span className="px-3 py-1 text-sm font-medium rounded-full bg-green-100 text-green-800">
+                  ACTIVE
+                </span>
+              </div>
+
+              <div className="mt-4 text-sm text-gray-500">
+                Member since January 1, 2025
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Profile Summary Section */}
+        <div className="grid md:grid-cols-2 gap-8 mb-8">
+          {/* Profile Form Card */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Profile Summary</h3>
+            <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Username
                 </label>
-                {editing ? (
-                  <div>
-                    <input
-                      type="text"
-                      name="username"
-                      value={formData.username}
-                      onChange={handleInputChange}
-                      disabled={true}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed focus:outline-none"
-                    />
-                    <p className="text-gray-500 text-sm mt-1">
-                      Username cannot be changed as it must remain unique across all users.
-                    </p>
-                    {errors.username && (
-                      <p className="text-red-500 text-sm mt-1">{errors.username}</p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-gray-900">{user?.username}</p>
-                )}
+                <p className="text-gray-900">{user?.username}</p>
               </div>
-
-              {/* Email */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Email Address
                 </label>
-                {editing ? (
-                  <div>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    {errors.email && (
-                      <p className="text-red-500 text-sm mt-1">{errors.email}</p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-gray-900">{user?.email}</p>
-                )}
+                <p className="text-gray-900">{user?.email}</p>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Account Status
+                </label>
+                <p className="text-gray-900">{user?.status}</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role
+                </label>
+                <p className="text-gray-900">{user?.role}</p>
+              </div>
+            </div>
+          </div>
 
-              {/* Password Change Section - Only shown when editing */}
-              {editing && (
-                <div className="border-t pt-6">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Current Password
-                      </label>
-                      <input
-                        type="password"
-                        name="currentPassword"
-                        value={formData.currentPassword}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Enter current password to change"
-                      />
-                      {errors.currentPassword && (
-                        <p className="text-red-500 text-sm mt-1">{errors.currentPassword}</p>
-                      )}
-                    </div>
+          {/* Additional Profile Summary */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Admin Profile</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Username
+                </label>
+                <p className="text-gray-900">SuperAdmin</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email Address
+                </label>
+                <p className="text-gray-900">admin@xmpcommerce.com</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Account Status
+                </label>
+                <p className="text-gray-900">ACTIVE</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Role
+                </label>
+                <p className="text-gray-900">SUPERADMIN</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Verification Status
+                </label>
+                <p className="text-gray-900">VERIFIED</p>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        New Password
-                      </label>
-                      <input
-                        type="password"
-                        name="newPassword"
-                        value={formData.newPassword}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Enter new password (optional)"
-                      />
-                      {errors.newPassword && (
-                        <p className="text-red-500 text-sm mt-1">{errors.newPassword}</p>
-                      )}
-                    </div>
+        {/* Bottom Section: Account Information Form */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-gray-900">Account Information</h2>
+            {!editing ? (
+              <button
+                onClick={() => setEditing(true)}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Edit Profile
+              </button>
+            ) : (
+              <div className="flex space-x-2">
+                <button
+                  onClick={handleCancel}
+                  className="bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            )}
+          </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Confirm New Password
-                      </label>
-                      <input
-                        type="password"
-                        name="confirmPassword"
-                        value={formData.confirmPassword}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="Confirm new password"
-                      />
-                      {errors.confirmPassword && (
-                        <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>
-                      )}
-                    </div>
-                  </div>
+          <div className="p-6 space-y-6">
+            {/* Username */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Username
+              </label>
+              {editing ? (
+                <div>
+                  <input
+                    type="text"
+                    name="username"
+                    value={formData.username}
+                    onChange={handleInputChange}
+                    disabled={true}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 cursor-not-allowed focus:outline-none"
+                  />
+                  <p className="text-gray-500 text-sm mt-1">
+                    Username cannot be changed as it must remain unique across all users.
+                  </p>
+                  {errors.username && (
+                    <p className="text-red-500 text-sm mt-1">{errors.username}</p>
+                  )}
                 </div>
+              ) : (
+                <p className="text-gray-900">{user?.username}</p>
               )}
             </div>
+
+            {/* Email */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address
+              </label>
+              {editing ? (
+                <div>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {errors.email && (
+                    <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-gray-900">{user?.email}</p>
+              )}
+            </div>
+
+            {/* Password Change Section - Only shown when editing */}
+            {editing && (
+              <div className="border-t pt-6">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Change Password</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Current Password
+                    </label>
+                    <input
+                      type="password"
+                      name="currentPassword"
+                      value={formData.currentPassword}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter current password to change"
+                    />
+                    {errors.currentPassword && (
+                      <p className="text-red-500 text-sm mt-1">{errors.currentPassword}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      New Password
+                    </label>
+                    <input
+                      type="password"
+                      name="newPassword"
+                      value={formData.newPassword}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter new password (optional)"
+                    />
+                    {errors.newPassword && (
+                      <p className="text-red-500 text-sm mt-1">{errors.newPassword}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Confirm New Password
+                    </label>
+                    <input
+                      type="password"
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Confirm new password"
+                    />
+                    {errors.confirmPassword && (
+                      <p className="text-red-500 text-sm mt-1">{errors.confirmPassword}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

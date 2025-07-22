@@ -88,9 +88,13 @@ export default function UserDashboard() {
           userData = {
             id: payload.userId,
             email: payload.email,
-            username: payload.username || payload.email.split('@')[0],
+            username: typeof payload.username === 'string' ? payload.username : '',
             role: payload.role
           }
+          console.log('User data from token:', userData)
+          console.log('User data from token:', userData)
+          console.log('User data from token:', userData)
+          console.log('User data from token:', userData)
           setUser(userData)
         } catch {
           console.warn('Could not parse user from token, falling back to API')
@@ -102,9 +106,21 @@ export default function UserDashboard() {
           })
 
           if (userResponse.ok) {
-            const userResponseData = await userResponse.json()
-            userData = userResponseData.user
-            setUser(userData)
+            const userResponseData = await userResponse.json();
+            const apiUser = userResponseData.user;
+            // Only use username from API, do not fallback to email or any other value
+            setUser({
+              ...apiUser,
+              username: typeof apiUser.username === 'string' ? apiUser.username : ''
+            });
+            userData = {
+              ...apiUser,
+              username: typeof apiUser.username === 'string' ? apiUser.username : ''
+            };
+          } else {
+            // Robust error handling for failed API response
+            setUser(null);
+            console.error('Failed to fetch user profile: ', userResponse.status, userResponse.statusText);
           }
         }
 
@@ -176,7 +192,7 @@ export default function UserDashboard() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         {/* Welcome Section */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4">
-          <div className="text-center">
+          <div id="user-dashboard-title" className="text-center">
             <h1 className="text-3xl font-bold text-gray-900">
               Welcome back, {user?.username || 'User'}!
             </h1>
@@ -295,14 +311,8 @@ export default function UserDashboard() {
                           </div>
                           <div className="flex items-center space-x-3">
                             <Link
-                              href={`/games/${participation.game.id}/access`}
-                              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
-                            >
-                              Continue →
-                            </Link>
-                            <Link
                               href={`/user/games/${participation.game.id}`}
-                              className="text-gray-600 hover:text-blue-500 text-sm font-medium"
+                              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
                             >
                               View Details
                             </Link>

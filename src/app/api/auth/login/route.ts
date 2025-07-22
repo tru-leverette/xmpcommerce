@@ -107,6 +107,7 @@ export async function POST(request: NextRequest) {
     const accessToken = generateToken({
       userId: user.id,
       email: user.email,
+      username: user.username,
       role: user.role,
       type: 'access'
     })
@@ -114,6 +115,7 @@ export async function POST(request: NextRequest) {
     const refreshToken = generateRefreshToken({
       userId: user.id,
       email: user.email,
+      username: user.username,
       role: user.role,
       type: 'refresh'
     })

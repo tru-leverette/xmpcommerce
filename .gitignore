@@ -41,5 +41,5 @@ yarn-error.log*
 next-env.d.ts
 
 # security audit (contains sensitive vulnerability information)
-SECURITY_AUDIT.md
-GAME_RULES.md
+# SECURITY_AUDIT.md
+# GAME_RULES.md

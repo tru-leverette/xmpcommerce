@@ -1,5 +1,5 @@
-import jwt from 'jsonwebtoken'
 import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret'
 
@@ -10,12 +10,13 @@ const getPrisma = async () => {
 }
 
 export interface JWTPayload {
-  userId: string
-  email: string
-  role: 'USER' | 'ADMIN' | 'SUPERADMIN'
-  type?: 'access' | 'refresh' // Token type
-  iat?: number // Issued at timestamp
-  exp?: number // Expiration timestamp
+  userId: string;
+  email: string;
+  username: string;
+  role: 'USER' | 'ADMIN' | 'SUPERADMIN';
+  type?: 'access' | 'refresh'; // Token type
+  iat?: number; // Issued at timestamp
+  exp?: number; // Expiration timestamp
 }
 
 export const hashPassword = async (password: string): Promise<string> => {
@@ -51,17 +52,17 @@ export const createRefreshTokenRecord = async (userId: string, token: string): P
   })
 }
 
-export const validateRefreshToken = async (token: string): Promise<{ userId: string; email: string; role: string } | null> => {
+export const validateRefreshToken = async (token: string): Promise<{ userId: string; email: string; username: string; role: string } | null> => {
   try {
     // Verify JWT signature first
     const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload
-    
+
     if (decoded.type !== 'refresh') {
       throw new Error('Invalid token type')
     }
 
     const prisma = await getPrisma()
-    
+
     // Check if refresh token exists in database and is not revoked
     const refreshTokenRecord = await prisma.refreshToken.findUnique({
       where: { token },
@@ -75,6 +76,7 @@ export const validateRefreshToken = async (token: string): Promise<{ userId: str
     return {
       userId: refreshTokenRecord.user.id,
       email: refreshTokenRecord.user.email,
+      username: refreshTokenRecord.user.username || '',
       role: refreshTokenRecord.user.role
     }
   } catch {
@@ -105,32 +107,33 @@ export const verifyToken = (token: string): JWTPayload => {
 export const verifyTokenAndUser = async (token: string): Promise<JWTPayload> => {
   // First verify the JWT signature and expiration
   const decoded = jwt.verify(token, JWT_SECRET) as JWTPayload
-  
+
   // Security: Check for token reuse/replay attacks
   const tokenAge = Date.now() / 1000 - (decoded.iat || 0)
   if (tokenAge > 7 * 24 * 60 * 60) { // 7 days max
     throw new Error('Token too old, please re-authenticate')
   }
-  
+
   // Lazy load prisma and verify user still exists in the database
   const prisma = await getPrisma()
   const user = await prisma.user.findUnique({
     where: { id: decoded.userId },
-    select: { id: true, email: true, role: true, status: true }
+    select: { id: true, email: true, username: true, role: true, status: true }
   })
-  
+
   if (!user) {
     throw new Error('User no longer exists')
   }
-  
+
   if (user.status === 'BANNED') {
     throw new Error('User account is banned')
   }
-  
+
   // Security: Always return database values, never trust token claims
   return {
     userId: user.id,
     email: user.email,
+    username: user.username || '',
     role: user.role
   }
 }
