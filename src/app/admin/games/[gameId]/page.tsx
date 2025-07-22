@@ -4,17 +4,30 @@ import { prisma } from '@/lib/prisma';
 import Link from 'next/link';
 
 export default async function AdminGamePage({ params }: { params: { gameId: string } }) {
-    const game = await prisma.game.findUnique({
-        where: { id: params.gameId },
-        include: {
-            levels: { include: { stages: true } },
-            clueSets: true,
-            participants: true,
+    const gameId = params.gameId;
+    if (!gameId || typeof gameId !== 'string') {
+        return <div>Invalid game ID</div>;
+    }
+    let game = null;
+    let progress = null;
+    try {
+        game = await prisma.game.findUnique({
+            where: { id: gameId },
+            include: {
+                levels: { include: { stages: true } },
+                clueSets: true,
+                participants: true,
+            }
+        });
+        if (game) {
+            progress = await getGameProgress(game.id);
         }
-    });
+    } catch (error) {
+        // Robust error handling
+        console.error('Error loading admin game page:', error);
+        return <div>Error loading game details. Please try again later.</div>;
+    }
     if (!game) return <div>Game not found</div>;
-
-    const progress = await getGameProgress(game.id);
 
     return (
         <ProtectedRouteGuard requiredRole={['ADMIN', 'SUPERADMIN']}>
