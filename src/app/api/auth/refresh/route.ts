@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     const newAccessToken = generateToken({
       userId: userData.userId,
       email: userData.email,
+      username: userData.username,
       role: userData.role as 'USER' | 'ADMIN' | 'SUPERADMIN',
       type: 'access'
     })

@@ -90,6 +90,7 @@ export async function POST(request: NextRequest) {
     const token = generateToken({
       userId: user.id,
       email: user.email,
+      username: user.username,
       role: user.role
     })
     console.log('JWT token generated successfully')
