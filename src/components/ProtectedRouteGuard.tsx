@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface ProtectedRouteGuardProps {
   children: React.ReactNode
@@ -17,10 +17,10 @@ const authCache = {
   ttl: 5 * 60 * 1000 // 5 minutes
 }
 
-export default function ProtectedRouteGuard({ 
-  children, 
-  requiredRole = [], 
-  redirectTo = '/auth/login' 
+export default function ProtectedRouteGuard({
+  children,
+  requiredRole = [],
+  redirectTo = '/auth/login'
 }: ProtectedRouteGuardProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -36,8 +36,8 @@ export default function ProtectedRouteGuard({
     hasVerified.current = true
 
     try {
-      const token = localStorage.getItem('token')
-      
+      const token = sessionStorage.getItem('token')
+
       if (!token) {
         console.warn('No token found - redirecting to login')
         setIsLoading(false)
@@ -57,8 +57,8 @@ export default function ProtectedRouteGuard({
 
       // Only call API if cache is invalid
       console.log('Making auth verification API call')
-      const testEndpoint = requiredRole.includes('ADMIN') || requiredRole.includes('SUPERADMIN') 
-        ? '/api/admin/users' 
+      const testEndpoint = requiredRole.includes('ADMIN') || requiredRole.includes('SUPERADMIN')
+        ? '/api/admin/users'
         : '/api/user/profile'
 
       const response = await fetch(testEndpoint, {
@@ -69,7 +69,7 @@ export default function ProtectedRouteGuard({
 
       if (!response.ok) {
         console.warn('Server-side auth failed - token invalid or insufficient permissions')
-        localStorage.clear()
+        sessionStorage.clear()
         authCache.isValid = false
         setIsAuthenticated(false)
         setIsLoading(false)
@@ -87,7 +87,7 @@ export default function ProtectedRouteGuard({
         try {
           const payload = JSON.parse(atob(token.split('.')[1]))
           const userRole = payload.role
-          
+
           if (!requiredRole.includes(userRole)) {
             console.warn('Insufficient role permissions')
             router.push(`${redirectTo}?redirect=${window.location.pathname}&reason=insufficient_permissions`)
@@ -95,7 +95,7 @@ export default function ProtectedRouteGuard({
           }
         } catch (error) {
           console.error('Token parsing failed:', error)
-          localStorage.clear()
+          sessionStorage.clear()
           authCache.isValid = false
           router.push(`${redirectTo}?redirect=${window.location.pathname}&reason=token_parse_error`)
           return
@@ -106,7 +106,7 @@ export default function ProtectedRouteGuard({
       setIsAuthenticated(true)
     } catch (error) {
       console.error('Auth verification failed:', error)
-      localStorage.clear()
+      sessionStorage.clear()
       authCache.isValid = false
       router.push(`${redirectTo}?redirect=${window.location.pathname}&reason=verification_failed`)
     } finally {

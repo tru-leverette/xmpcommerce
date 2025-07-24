@@ -3,6 +3,7 @@
 import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 interface UserData {
@@ -48,37 +49,63 @@ export default function UserDashboard() {
   const [loading, setLoading] = useState(true)
   const [totalScavengerStones, setTotalScavengerStones] = useState(0)
 
+  const router = useRouter();
   useEffect(() => {
+    // Helper: Clear all dashboard_data_* and admin_verification_* session storage keys
+    const clearStaleSessionStorage = () => {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && (key.startsWith('dashboard_data_') || key.startsWith('admin_verification_'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((key) => sessionStorage.removeItem(key));
+    };
+
     // Skip if already fetching or already loaded
     if (!loading || (participations.length > 0 && badges.length > 0)) {
-      return
+      return;
     }
 
     // Check session storage for cached data to prevent duplicate calls
-    const cacheKey = 'dashboard_data_' + Date.now().toString().slice(0, -5) // 5-minute cache
-    const cachedData = sessionStorage.getItem(cacheKey)
+    const cacheKey = 'dashboard_data_' + Date.now().toString().slice(0, -5); // 5-minute cache
+    const cachedData = sessionStorage.getItem(cacheKey);
 
     if (cachedData) {
       try {
-        const { user, participations, badges, totalScavengerStones } = JSON.parse(cachedData)
-        setUser(user)
-        setParticipations(participations)
-        setBadges(badges)
-        setTotalScavengerStones(totalScavengerStones)
-        setLoading(false)
-        return
+        const { user, participations, badges, totalScavengerStones } = JSON.parse(cachedData);
+        // If user or participations are missing, clear all dashboard/admin session storage
+        if (!user || !participations) {
+          clearStaleSessionStorage();
+        } else {
+          setUser(user);
+          setParticipations(participations);
+          setBadges(badges);
+          setTotalScavengerStones(totalScavengerStones);
+          setLoading(false);
+          return;
+        }
       } catch {
         // Clear bad cache and continue
-        sessionStorage.removeItem(cacheKey)
+        sessionStorage.removeItem(cacheKey);
+        clearStaleSessionStorage();
       }
     }
 
     const fetchDashboardData = async () => {
       try {
-        const token = localStorage.getItem('token')
+        const token = sessionStorage.getItem('token')
         if (!token) {
-          setLoading(false)
-          return
+          clearStaleSessionStorage();
+          sessionStorage.clear();
+          setUser(null);
+          setParticipations([]);
+          setBadges([]);
+          setTotalScavengerStones(0);
+          setLoading(false);
+          router.push('/auth/login?redirect=/dashboard&reason=missing_token');
+          return;
         }
 
         // Get user data from token instead of API call (optimization)
@@ -88,7 +115,7 @@ export default function UserDashboard() {
           userData = {
             id: payload.userId,
             email: payload.email,
-            username: payload.username || payload.email.split('@')[0],
+            username: typeof payload.username === 'string' ? payload.username : '',
             role: payload.role
           }
           setUser(userData)
@@ -102,9 +129,21 @@ export default function UserDashboard() {
           })
 
           if (userResponse.ok) {
-            const userResponseData = await userResponse.json()
-            userData = userResponseData.user
-            setUser(userData)
+            const userResponseData = await userResponse.json();
+            const apiUser = userResponseData.user;
+            // Only use username from API, do not fallback to email or any other value
+            setUser({
+              ...apiUser,
+              username: typeof apiUser.username === 'string' ? apiUser.username : ''
+            });
+            userData = {
+              ...apiUser,
+              username: typeof apiUser.username === 'string' ? apiUser.username : ''
+            };
+          } else {
+            // Robust error handling for failed API response
+            setUser(null);
+            console.error('Failed to fetch user profile: ', userResponse.status, userResponse.statusText);
           }
         }
 
@@ -156,7 +195,7 @@ export default function UserDashboard() {
     }
 
     fetchDashboardData()
-  }, [loading, participations.length, badges.length])
+  }, [loading, participations.length, badges.length, router])
 
   if (loading) {
     return (
@@ -176,7 +215,7 @@ export default function UserDashboard() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
         {/* Welcome Section */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4">
-          <div className="text-center">
+          <div id="user-dashboard-title" className="text-center">
             <h1 className="text-3xl font-bold text-gray-900">
               Welcome back, {user?.username || 'User'}!
             </h1>
@@ -250,7 +289,7 @@ export default function UserDashboard() {
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Current Games */}
-            <div className="bg-white rounded-lg shadow">
+            <div id="user-dashboard-games=widget" className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Your Games</h2>
               </div>
@@ -293,12 +332,14 @@ export default function UserDashboard() {
                               <span>Level {participation.progress[0].currentLevel} Stage {participation.progress[0].currentStage} Clue {participation.progress[0].currentClue}</span>
                             )}
                           </div>
-                          <Link
-                            href={`/games/${participation.game.id}/access`}
-                            className="text-blue-600 hover:text-blue-500 text-sm font-medium"
-                          >
-                            Continue →
-                          </Link>
+                          <div className="flex items-center space-x-3">
+                            <Link
+                              href={`/user/games/${participation.game.id}`}
+                              className="text-blue-600 hover:text-blue-500 text-sm font-medium"
+                            >
+                              View Details
+                            </Link>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -318,7 +359,7 @@ export default function UserDashboard() {
             </div>
 
             {/* Recent Badges */}
-            <div className="bg-white rounded-lg shadow">
+            <div id="user-dashboard-badges=widget" className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b border-gray-200">
                 <h2 className="text-xl font-semibold text-gray-900">Recent Badges</h2>
               </div>

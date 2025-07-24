@@ -27,7 +27,14 @@ interface Submission {
   id: string
   isCorrect: boolean
   aiAnalysis: string
-  pebblesEarned: number
+}
+
+interface Progress {
+  currentClueNumber: number;
+  totalClues: number;
+  isGameComplete: boolean;
+  currentStage: string;
+  // ...other fields as needed
 }
 
 function PlayGame() {
@@ -46,7 +53,9 @@ function PlayGame() {
   const [currentClueNumber, setCurrentClueNumber] = useState(1)
   const [totalClues, setTotalClues] = useState(4)
   const [gameComplete, setGameComplete] = useState(false)
-  const [gameError, setGameError] = useState<string | null>(null) // Add error state to prevent recursive calls
+  const [gameError, setGameError] = useState<string | null>(null)
+  const [redirected, setRedirected] = useState(false);
+  const [currentStageId, setCurrentStageId] = useState<string | null>(null)
 
   // Initialize location from URL parameters or capture fresh location
   useEffect(() => {
@@ -97,52 +106,49 @@ function PlayGame() {
   }, [searchParams])
 
   // Fetch user's progress from database
-  const fetchProgress = useCallback(async () => {
+  const fetchProgress = useCallback(async (): Promise<Progress | null> => {
     try {
-      const token = localStorage.getItem('token')
-      const userId = localStorage.getItem('userId')
-
+      const token = sessionStorage.getItem('token');
+      const userId = sessionStorage.getItem('userId');
       const response = await fetch(`/api/games/${gameId}/progress`, {
         headers: {
           'Authorization': `Bearer ${token || ''}`
         }
-      })
-
-      const data = await response.json()
+      });
+      const data = await response.json();
       if (response.ok) {
-        const progress = data.progress
-        setCurrentClueNumber(progress.currentClueNumber)
-        setTotalClues(progress.totalClues)
-        setGameComplete(progress.isGameComplete)
-        return progress.currentClueNumber
+        const progress: Progress = data.progress;
+        setCurrentClueNumber(progress.currentClueNumber);
+        setTotalClues(progress.totalClues);
+        setGameComplete(progress.isGameComplete);
+        setCurrentStageId(progress.currentStage);
+        return progress;
       } else {
         const errorDetails = await handleApiError(response, {
           endpoint: `/api/games/${gameId}/progress`,
           method: 'GET',
           gameId,
           userId: userId || undefined
-        })
-
-        console.error('Progress fetch API error:', errorDetails)
-        return 1 // Default to first clue
+        });
+        console.error('Progress fetch API error:', errorDetails);
+        return null;
       }
     } catch (error) {
       const errorDetails = await handleNetworkError(error as Error, {
         operation: 'fetch_progress',
         gameId,
-        userId: localStorage.getItem('userId') || undefined
-      })
-
-      console.error('Progress fetch network error:', errorDetails)
-      return 1 // Default to first clue
+        userId: sessionStorage.getItem('userId') || undefined
+      });
+      console.error('Progress fetch network error:', errorDetails);
+      return null;
     }
   }, [gameId])
 
   // Update progress in database when clue is completed
   const updateProgress = useCallback(async (clueNumber: number, isCorrect: boolean, submissionData?: object) => {
     try {
-      const token = localStorage.getItem('token')
-      const userId = localStorage.getItem('userId')
+      const token = sessionStorage.getItem('token')
+      const userId = sessionStorage.getItem('userId')
 
       const response = await fetch(`/api/games/${gameId}/progress`, {
         method: 'POST',
@@ -177,133 +183,181 @@ function PlayGame() {
       const errorDetails = await handleNetworkError(error as Error, {
         operation: 'update_progress',
         gameId,
-        userId: localStorage.getItem('userId') || undefined
+        userId: sessionStorage.getItem('userId') || undefined
       })
 
       console.error('Progress update network error:', errorDetails)
       throw error
     }
   }, [gameId])
-  const fetchCurrentClue = useCallback(async (clueNumber = currentClueNumber) => {
-    try {
-      console.log('Fetching clue for game:', gameId, 'clueNumber:', clueNumber)
-      const token = localStorage.getItem('token')
-      const userId = localStorage.getItem('userId')
-
-      // Build URL with location parameters if available
-      let url = `/api/games/${gameId}/clues?clueNumber=${clueNumber}`
-      if (location) {
-        url += `&lat=${location.lat}&lng=${location.lng}`
-      }
-
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token || ''}`
+  const fetchCurrentClue = useCallback(
+    async (clueNumber: number, stageId: string, retryCount = 0) => {
+      try {
+        const token = sessionStorage.getItem('token');
+        const userId = sessionStorage.getItem('userId');
+        let url = `/api/games/${gameId}/clues?clueNumber=${clueNumber}`;
+        if (location) {
+          url += `&lat=${location.lat}&lng=${location.lng}`;
         }
-      })
-
-      // Enhanced API error handling
-      if (!response.ok) {
-        const errorDetails = await handleApiError(response, {
-          endpoint: url,
-          method: 'GET',
-          gameId,
-          userId: userId || undefined
-        })
-
-        const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
-        console.error('Clue API error details:', errorDetails)
-
-        // Set error state to prevent recursive calls
-        setGameError(`Error loading clue: ${userMessage}`)
-        showToast.error(`Error loading clue: ${userMessage}`)
-        setLoading(false)
-        return
-      }
-
-      const data = await response.json()
-      console.log('Clue API response:', data)
-
-      // Handle location required response
-      if (data.isLocationRequired) {
-        const locationMessage = `Location Required: ${data.message}`
-        console.log('Location required:', data)
-        setGameError(locationMessage)
-        showToast.warning(locationMessage)
-        setLoading(false)
-        return
-      }
-
-      // Handle geographic restriction response
-      if (data.isGeographicRestriction) {
-        const restrictionMessage = `Geographic Restriction: ${data.message}`
-        console.log('Geographic restriction detected:', data)
-        setGameError(restrictionMessage)
-        showToast.warning(restrictionMessage)
-        setLoading(false)
-        return
-      }
-
-      // Handle no clues available response
-      if (data.isNoCluesAvailable) {
-        const noCluesMessage = `No Clues Available: ${data.message}`
-        console.log('No clues available:', data)
-        setGameError(noCluesMessage)
-        showToast.info(noCluesMessage)
-        setLoading(false)
-        return
-      }
-
-      if (data.clue) {
-        setCurrentClue(data.clue)
-        setTotalClues(data.totalClues || 4)
-        setCurrentClueNumber(data.clue.clueNumber)
-        console.log('Clue set successfully:', data.clue)
-
-        // Log clue set information if available
-        if (data.clueSetInfo) {
-          console.log('Assigned to clue set:', data.clueSetInfo)
+        if (stageId) {
+          url += `&stageId=${stageId}`;
         }
-      } else {
-        // Handle case where no clue is returned
-        const errorDetails = {
-          errorType: ErrorTypes.CLUE_LOADING_ERROR,
-          errorMessage: 'No clue data returned from server',
-          timestamp: new Date().toISOString(),
-          gameId,
-          userId: userId || undefined,
-          additionalContext: {
-            requestedClueNumber: clueNumber,
-            responseData: data,
-            endpoint: url
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Bearer ${token || ''}`
+          }
+        });
+
+        let data: unknown = {};
+        try {
+          data = await response.json();
+        } catch { }
+
+        // Handle 'preparing' status or 404 (Not Found)
+        // Type guard helpers
+        const isPreparing = (d: unknown): d is { preparing: boolean } => {
+          return (
+            typeof d === 'object' && d !== null &&
+            Object.prototype.hasOwnProperty.call(d, 'preparing') &&
+            (d as Record<string, unknown>).preparing === true
+          );
+        };
+        const isErrorObj = (d: unknown): d is { error: string } => {
+          return (
+            typeof d === 'object' && d !== null &&
+            Object.prototype.hasOwnProperty.call(d, 'error') &&
+            typeof (d as Record<string, unknown>).error === 'string'
+          );
+        };
+        const isLocationRequired = (d: unknown): d is { isLocationRequired: boolean, message: string } => {
+          return (
+            typeof d === 'object' && d !== null &&
+            Object.prototype.hasOwnProperty.call(d, 'isLocationRequired') &&
+            (d as Record<string, unknown>).isLocationRequired === true
+          );
+        };
+        const isGeographicRestriction = (d: unknown): d is { isGeographicRestriction: boolean, message: string } => {
+          return (
+            typeof d === 'object' && d !== null &&
+            Object.prototype.hasOwnProperty.call(d, 'isGeographicRestriction') &&
+            (d as Record<string, unknown>).isGeographicRestriction === true
+          );
+        };
+        const isNoCluesAvailable = (d: unknown): d is { isNoCluesAvailable: boolean, message: string } => {
+          return (
+            typeof d === 'object' && d !== null &&
+            Object.prototype.hasOwnProperty.call(d, 'isNoCluesAvailable') &&
+            (d as Record<string, unknown>).isNoCluesAvailable === true
+          );
+        };
+        const isClueObj = (d: unknown): d is { clue: Clue, totalClues?: number } => {
+          return (
+            typeof d === 'object' && d !== null &&
+            Object.prototype.hasOwnProperty.call(d, 'clue') &&
+            typeof (d as Record<string, unknown>).clue === 'object'
+          );
+        };
+
+        if (response.status === 202 || isPreparing(data) || response.status === 404) {
+          if (retryCount < 5) {
+            setLoading(true);
+            setGameError(null);
+            setTimeout(() => {
+              fetchCurrentClue(clueNumber, stageId, retryCount + 1);
+            }, 2000);
+            return;
+          } else {
+            setGameError('Game is still being prepared. Please try again in a few moments.');
+            setLoading(false);
+            return;
           }
         }
 
-        // Log the error using the proper utility
-        await logError(errorDetails)
+        if (!response.ok) {
+          if (
+            isErrorObj(data) &&
+            data.error === 'Sorry we were unable to create your hunt, please try again.' &&
+            typeof window !== 'undefined' &&
+            !redirected
+          ) {
+            setRedirected(true);
+            window.location.href = '/games/hunt-error';
+            return;
+          }
+          const errorDetails = await handleApiError(response, {
+            endpoint: url,
+            method: 'GET',
+            gameId,
+            userId: userId || undefined
+          });
+          const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes);
+          console.error('Clue API error details:', errorDetails);
+          setGameError(`Error loading clue: ${userMessage}`);
+          showToast.error(`Error loading clue: ${userMessage}`);
+          setLoading(false);
+          return;
+        }
 
-        const userMessage = getUserFriendlyErrorMessage(ErrorTypes.CLUE_LOADING_ERROR)
-        showToast.error(userMessage)
+        if (isLocationRequired(data)) {
+          const locationMessage = `Location Required: ${data.message}`;
+          setGameError(locationMessage);
+          showToast.warning(locationMessage);
+          setLoading(false);
+          return;
+        }
+        if (isGeographicRestriction(data)) {
+          const restrictionMessage = `Geographic Restriction: ${data.message}`;
+          setGameError(restrictionMessage);
+          showToast.warning(restrictionMessage);
+          setLoading(false);
+          return;
+        }
+        if (isNoCluesAvailable(data)) {
+          const noCluesMessage = `No Clues Available: ${data.message}`;
+          setGameError(noCluesMessage);
+          showToast.info(noCluesMessage);
+          setLoading(false);
+          return;
+        }
+        if (isClueObj(data)) {
+          setCurrentClue(data.clue);
+          setTotalClues(data.totalClues || 4);
+          setCurrentClueNumber(data.clue.clueNumber);
+        } else {
+          const errorDetails = {
+            errorType: ErrorTypes.CLUE_LOADING_ERROR,
+            errorMessage: 'No clue data returned from server',
+            timestamp: new Date().toISOString(),
+            gameId,
+            userId: userId || undefined,
+            additionalContext: {
+              requestedClueNumber: clueNumber,
+              responseData: data,
+              endpoint: url
+            }
+          };
+          await logError(errorDetails);
+          const userMessage = getUserFriendlyErrorMessage(ErrorTypes.CLUE_LOADING_ERROR);
+          showToast.error(userMessage);
+        }
+      } catch (error) {
+        const errorDetails = await handleNetworkError(error as Error, {
+          operation: 'fetch_current_clue',
+          gameId,
+          userId: sessionStorage.getItem('userId') || undefined
+        });
+        console.error('Network error fetching clue:', errorDetails);
+        const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes);
+        const errorMessage = `Network error: ${userMessage}`;
+        setGameError(errorMessage);
+        showToast.error(errorMessage);
+        setLoading(false);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      // Enhanced network error handling
-      const errorDetails = await handleNetworkError(error as Error, {
-        operation: 'fetch_current_clue',
-        gameId,
-        userId: localStorage.getItem('userId') || undefined
-      })
-
-      console.error('Network error fetching clue:', errorDetails)
-      const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
-      const errorMessage = `Network error: ${userMessage}`
-      setGameError(errorMessage)
-      showToast.error(errorMessage)
-      setLoading(false)
-    } finally {
-      console.log('Setting loading to false')
-      setLoading(false)
-    }
-  }, [gameId, currentClueNumber, location])
+    },
+    [gameId, location, redirected]
+  );
 
   const requestLocation = useCallback(async () => {
     if (navigator.geolocation) {
@@ -340,12 +394,14 @@ function PlayGame() {
           console.log('Location obtained successfully:', position.coords.latitude, position.coords.longitude)
 
           // Refetch clue with new location
-          fetchCurrentClue(currentClueNumber)
+          if (currentStageId) {
+            fetchCurrentClue(currentClueNumber, currentStageId);
+          }
           showToast.success('Location updated successfully!')
         },
         async (error) => {
           // Use enhanced error handling
-          const errorDetails = await handleGeolocationError(error, gameId, localStorage.getItem('userId') || undefined)
+          const errorDetails = await handleGeolocationError(error, gameId, sessionStorage.getItem('userId') || undefined)
           const userMessage = getUserFriendlyErrorMessage(errorDetails.errorType as ErrorTypes)
 
           console.error('Geolocation error details:', errorDetails)
@@ -390,7 +446,7 @@ function PlayGame() {
         errorMessage: 'Geolocation is not supported by this browser',
         timestamp: new Date().toISOString(),
         gameId,
-        userId: localStorage.getItem('userId') || undefined
+        userId: sessionStorage.getItem('userId') || undefined
       }
 
       // Log the error using the proper utility
@@ -409,7 +465,7 @@ function PlayGame() {
         showToast.error(userMessage)
       }
     }
-  }, [gameId, currentClueNumber, fetchCurrentClue])
+  }, [gameId, currentClueNumber, fetchCurrentClue, currentStageId])
 
   useEffect(() => {
     console.log('UseEffect triggered - showPirateMap:', showPirateMap, 'loading:', loading, 'gameError:', gameError)
@@ -420,15 +476,13 @@ function PlayGame() {
 
       const fetchData = async () => {
         try {
-          // First fetch user's progress to get current clue number
-          const progressClueNumber = await fetchProgress()
-          if (!isMounted) return
-
-          // Then fetch the current clue based on progress
-          await fetchCurrentClue(progressClueNumber)
-          if (!isMounted) return
-
-          requestLocation()
+          // Fetch progress and get currentStage and currentClueNumber
+          const progress = await fetchProgress();
+          if (!isMounted || !progress) return;
+          // Fetch clue using both currentClueNumber and currentStage
+          await fetchCurrentClue(progress.currentClueNumber, progress.currentStage);
+          if (!isMounted) return;
+          requestLocation();
         } catch (error) {
           console.error('Error during initial game load:', error)
           if (isMounted) {
@@ -487,7 +541,7 @@ function PlayGame() {
         errorMessage,
         timestamp: new Date().toISOString(),
         gameId,
-        userId: localStorage.getItem('userId') || undefined,
+        userId: sessionStorage.getItem('userId') || undefined,
         additionalContext: {
           hasCurrentClue: !!currentClue,
           hasLocation: !!location,
@@ -505,8 +559,8 @@ function PlayGame() {
     setSubmitting(true)
 
     try {
-      const token = localStorage.getItem('token')
-      const userId = localStorage.getItem('userId')
+      const token = sessionStorage.getItem('token')
+      const userId = sessionStorage.getItem('userId')
 
       const submissionData: {
         clueId: string
@@ -597,7 +651,7 @@ function PlayGame() {
             // Move to next clue after a delay
             setTimeout(() => {
               setCurrentClueNumber(data.nextClueNumber)
-              fetchCurrentClue(data.nextClueNumber)
+              fetchCurrentClue(data.nextClueNumber, data.currentStage)
               setTextAnswer('')
               setSelectedFile(null)
               setLastSubmission(null)
@@ -629,7 +683,7 @@ function PlayGame() {
       const errorDetails = await handleNetworkError(error as Error, {
         operation: 'submit_answer',
         gameId,
-        userId: localStorage.getItem('userId') || undefined
+        userId: sessionStorage.getItem('userId') || undefined
       })
 
       console.error('Network error submitting answer:', errorDetails)
@@ -678,11 +732,7 @@ function PlayGame() {
               <p className="text-lg text-gray-700 mb-6">
                 You&apos;ve successfully completed this stage! You found all {totalClues} clues and proved yourself as a true adventurer.
               </p>
-              <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-4 mb-6">
-                <p className="text-yellow-800 font-medium">
-                  🏴‍☠️ Total Pebbles Earned: {totalClues * 10}
-                </p>
-              </div>
+
               <button
                 onClick={() => window.location.href = '/dashboard'}
                 className="bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700"
@@ -863,13 +913,7 @@ function PlayGame() {
                 {lastSubmission.aiAnalysis}
               </p>
 
-              {lastSubmission.isCorrect && lastSubmission.pebblesEarned > 0 && (
-                <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-3">
-                  <p className="text-yellow-800 font-medium">
-                    🏆 You earned {lastSubmission.pebblesEarned} pebbles!
-                  </p>
-                </div>
-              )}
+
 
               {lastSubmission.isCorrect && (
                 <p className="text-green-600 text-sm mt-4">

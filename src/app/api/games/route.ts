@@ -66,11 +66,27 @@ export async function GET(request: NextRequest) {
     })
 
     // Add isRegistered flag for authenticated users
-    const gamesWithRegistration = games.map(game => ({
+    type GameWithParticipants = {
+      id: string;
+      title: string;
+      description: string;
+      location: string;
+      status: string;
+      launchDate: Date | null;
+      phase: string | null;
+      createdAt: Date;
+      totalLevels: number | null;
+      stagesPerLevel: number | null;
+      cluesPerStage: number | null;
+      creator: { username: string };
+      _count: { participants: number };
+      participants?: { id: string }[];
+    };
+    const gamesWithRegistration = games.map((game: GameWithParticipants) => ({
       ...game,
-      isRegistered: currentUserId ? game.participants.length > 0 : false,
+      isRegistered: currentUserId ? (Array.isArray(game.participants) && game.participants.length > 0) : false,
       participants: undefined // Remove participants array from response
-    }))
+    }));
 
     return NextResponse.json({ games: gamesWithRegistration })
 

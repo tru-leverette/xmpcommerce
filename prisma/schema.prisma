@@ -27,6 +27,7 @@ model User {
   password      String
   role          UserRole       @default(USER)
   status        UserStatus     @default(ACTIVE)
+  avatar        String?        @default("")
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   createdGames  Game[]
@@ -60,6 +61,7 @@ model Game {
   levels         Level[]
   participants   Participant[]
   clueSets       ClueSet[] // Geolocation-based clue sets
+  GameProgress   GameProgress?
 
   @@index([creatorId], map: "games_creatorId_fkey")
   @@map("games")
@@ -254,12 +256,16 @@ model ClueSet {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   gameId          String
+  phase           Phase         @default(PHASE_1)
+  levelNumber     Int           @default(1)
+  stageNumber     Int           @default(1)
   game            Game          @relation(fields: [gameId], references: [id], onDelete: Cascade)
   hunts           Hunt[] // Hunts that belong to this clue set
   participants    Participant[] // Participants assigned to this clue set
 
   @@index([gameId])
   @@index([centerLatitude, centerLongitude])
+  @@index([gameId, phase, levelNumber, stageNumber])
   @@index([minLatitude, maxLatitude, minLongitude, maxLongitude])
   @@map("clue_sets")
 }
@@ -352,4 +358,14 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model GameProgress {
+  id        String   @id @default(uuid())
+  game      Game     @relation(fields: [gameId], references: [id])
+  gameId    String   @unique
+  phase     String
+  levelId   String?
+  stageId   String?
+  updatedAt DateTime @updatedAt
 }

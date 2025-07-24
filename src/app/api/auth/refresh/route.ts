@@ -14,7 +14,7 @@ const loadDependencies = async () => {
 export async function POST(request: NextRequest) {
   try {
     const { validateRefreshToken, generateToken, prisma } = await loadDependencies()
-    
+
     const { refreshToken } = await request.json()
 
     if (!refreshToken) {
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
     // Validate the refresh token
     const userData = await validateRefreshToken(refreshToken)
-    
+
     if (!userData) {
       return NextResponse.json(
         { error: 'Invalid or expired refresh token' },
@@ -38,13 +38,14 @@ export async function POST(request: NextRequest) {
     const newAccessToken = generateToken({
       userId: userData.userId,
       email: userData.email,
+      username: userData.username,
       role: userData.role as 'USER' | 'ADMIN' | 'SUPERADMIN',
       type: 'access'
     })
 
     // Optional: Rotate refresh token for enhanced security
     // For now, we'll keep the same refresh token but could generate a new one
-    
+
     // Log the token refresh activity
     try {
       await prisma.activity.create({

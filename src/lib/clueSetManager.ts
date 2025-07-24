@@ -1,4 +1,44 @@
 /**
+ * Find all clue sets that overlap a given location and return the closest one.
+ */
+export async function findClosestOverlappingClueSet(
+    gameId: string,
+    location: Location
+): Promise<{
+    id: string;
+    name: string;
+    description: string | null;
+    centerLatitude: number;
+    centerLongitude: number;
+    radiusKm: number;
+} | null> {
+    const clueSets = await prisma.clueSet.findMany({
+        where: { gameId, isActive: true },
+        select: {
+            id: true,
+            name: true,
+            description: true,
+            centerLatitude: true,
+            centerLongitude: true,
+            radiusKm: true
+        }
+    });
+    // Filter to only those that overlap the location
+    const overlapping = clueSets.filter(cs => isPointInClueSet(location, cs));
+    if (overlapping.length === 0) return null;
+    // Return the closest overlapping clue set
+    let minDist = Number.POSITIVE_INFINITY;
+    let closest: typeof overlapping[0] | null = null;
+    for (const cs of overlapping) {
+        const dist = calculateDistance(location, { lat: cs.centerLatitude, lng: cs.centerLongitude });
+        if (dist < minDist) {
+            minDist = dist;
+            closest = cs;
+        }
+    }
+    return closest;
+}
+/**
  * Calculate bounding box for a given center point and radius in kilometers
  */
 export function calculateBoundingBox(center: Location, radiusKm: number): ClueSetBounds {
@@ -57,8 +97,68 @@ export async function findDifferentGroupClueSet(gameId: string, location: Locati
  */
 
 
-import { ClueGenerationParams, generateClues, GeneratedClue } from './openaiClueGenerator';
-import { prisma } from './prisma';
+import { ClueType, PrismaClient } from '@prisma/client';
+// import path from 'path';
+// import { NextRequest } from 'next/server';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { default: OpenAI } = require('openai');
+
+const prisma = new PrismaClient();
+
+type DifficultyText = 'Easy' | 'Intermediate' | 'Hard' | 'Difficult';
+
+async function generateAIClues(
+    latitude: number,
+    longitude: number,
+    difficulty: DifficultyText,
+    mainTarget?: string,
+    theme?: string,
+    numClues: number = 2
+): Promise<{ question: string; answer: string; hint?: string; type: ClueType }[]> {
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable is not set.');
+    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+    const prompt = `Generate ${numClues} scavenger hunt clues and answers as a logical progression, where each clue leads to the next, culminating in a final goal. The clues must be connected, with each clue's answer or location providing the context or access for the next clue. The final clue should lead to the ultimate goal or location.\n\nParameters:\n- Difficulty Level: ${difficulty}\n- Main Target: ${mainTarget || "(infer based on difficulty and theme)"}\n- Theme: ${theme || "(select based on prior narrative)"}\n\nRequirements:\n1. The clues must form a chain: each clue should logically lead to the next, and the final clue should reveal or require the ultimate goal.\n2. Each clue must include a clear, concise, and unambiguous answer in the 'answer' field. Do not leave the answer blank or vague.\n3. Each clue should be logically solvable, with subtle hints that encourage deduction.\n4. Clues should reflect the selected theme and target (or inferred ones) while maintaining narrative continuity and progression.\n5. Difficulty should influence complexity of clue structure—higher levels include layered metaphors, wordplay, or symbolic references.\n6. Output only a JSON array, no explanations or extra text. Each clue must have: question, answer, (optional) hint, and type.\n\nExample of a progressive clue chain:\n[\n  {"question": "Go to the restaurant downtown known for its deep-dish pizza and take a selfie outside.", "answer": "Photo at Giordano's restaurant", "type": "PHOTO_UPLOAD"},\n  {"question": "Now, visit the golf course where Chicago's famous baseball player relaxes. Take a selfie in the lobby.", "answer": "Photo at Harborside International Golf Center lobby", "type": "PHOTO_UPLOAD"},\n  {"question": "Finally, find the parking space number 22 at Wrigley Field and take a selfie there.", "answer": "Photo at parking space 22, Wrigley Field", "type": "PHOTO_UPLOAD"}\n]\n\nRespond in JSON array format, e.g.:\n[\n  {"question": "...", "answer": "...", "hint": "...", "type": "TEXT_ANSWER"},\n  {"question": "...", "answer": "...", "type": "PHOTO_UPLOAD"}\n]`;
+    const completion = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+            { role: 'system', content: 'You are a helpful scavenger hunt clue generator.' },
+            { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 600,
+    });
+    const content = completion.choices[0]?.message?.content;
+    if (!content) throw new Error('No content from OpenAI');
+    let clues: { question: string; answer: string; hint?: string; type: ClueType }[] = [];
+    try {
+        clues = JSON.parse(content);
+    } catch {
+        throw new Error('Failed to parse AI response as JSON: ' + content);
+    }
+    if (!Array.isArray(clues) || clues.length === 0) {
+        throw new Error('No clues returned from AI');
+    }
+    const validatedClues = clues.map((clue, idx) => {
+        if (
+            typeof clue.question !== 'string' ||
+            typeof clue.answer !== 'string' ||
+            clue.question.trim().length <= 1 ||
+            clue.answer.trim().length <= 1
+        ) {
+            throw new Error(`Clue or answer missing, invalid, or too short at index ${idx}`);
+        }
+        return {
+            question: clue.question,
+            answer: clue.answer,
+            hint: typeof clue.hint === 'string' ? clue.hint : undefined,
+            type: clue.type === 'PHOTO_UPLOAD' ? 'PHOTO_UPLOAD' as ClueType : 'TEXT_ANSWER' as ClueType,
+        };
+    });
+    return validatedClues;
+}
+// import { prisma } from './prisma';
 
 export interface Location {
     lat: number
@@ -131,15 +231,31 @@ export async function assignParticipantToClueSet(
     const stage = progress.currentStage;
     const stageId = progress.stageId;
 
-    let clueSet: { id: string; name: string; description: string | null; centerLatitude: number; centerLongitude: number; radiusKm: number } | null = null;
 
-    if (level === 3 && (stage === 3 || stage === 4)) {
-        clueSet = await findDifferentClueSet(gameId, location);
-    } else if (level === 6 && (stage === 3 || stage === 4)) {
-        clueSet = await findDifferentGroupClueSet(gameId, location);
-    } else {
-        clueSet = await findExistingClueSet(gameId, location);
-        if (!clueSet) {
+    // 1. Check if a clue set exists for this location
+    let clueSet = await findExistingClueSet(gameId, location);
+    if (!clueSet) {
+        // 2. Check if a new clue set can be created at this location without overlapping
+        const allClueSets = await prisma.clueSet.findMany({
+            where: { gameId, isActive: true },
+            select: {
+                id: true,
+                centerLatitude: true,
+                centerLongitude: true,
+                radiusKm: true
+            }
+        });
+        const newBounds = calculateBoundingBox(location, 1); // Assume default radius 1km for new sets
+        let canCreate = true;
+        for (const cs of allClueSets) {
+            const existingBounds = calculateBoundingBox({ lat: cs.centerLatitude, lng: cs.centerLongitude }, cs.radiusKm);
+            if (cluesetsOverlap(newBounds, existingBounds, Math.max(1, cs.radiusKm))) {
+                canCreate = false;
+                break;
+            }
+        }
+        if (canCreate) {
+            // Create new clue set and assign
             const locationName = `ClueSet-${Math.round(location.lat * 1000)}-${Math.round(location.lng * 1000)}`;
             clueSet = await createClueSet({
                 gameId,
@@ -152,6 +268,9 @@ export async function assignParticipantToClueSet(
                 cluesCount: 4,
                 stageId
             });
+        } else {
+            // Assign to closest existing clue set
+            clueSet = await findClosestOverlappingClueSet(gameId, location);
         }
     }
 
@@ -296,7 +415,7 @@ export async function createClueSet(options: CreateClueSetOptions) {
     const location: Location = options.location;
     const name: string = options.name;
     const description: string = options.description ?? '';
-    const phase: string = options.phase ?? 'PHASE_1';
+    // phase is not used; removed to resolve lint error.
     const level: number = options.level ?? 1;
     const stage: number = options.stage ?? 1;
     const cluesCount: number = options.cluesCount ?? 4;
@@ -333,51 +452,57 @@ export async function createClueSet(options: CreateClueSetOptions) {
     });
 
     // Generate clues using OpenAI
-    const params: ClueGenerationParams = {
-        locationName: name,
-        center: { lat: optimalLocation.lat, lng: optimalLocation.lng },
-        radiusKm,
-        phase,
-        level,
-        stage,
-        difficulty: level <= 3 ? 'easy' : level <= 6 ? 'medium' : 'hard',
+    const generatedClues = await generateAIClues(
+        optimalLocation.lat,
+        optimalLocation.lng,
+        level <= 3 ? 'Easy' : level <= 6 ? 'Intermediate' : 'Hard',
+        name,
+        undefined,
         cluesCount
-    };
-    const generatedClues: GeneratedClue[] = await generateClues(params);
+    );
 
-    // Find the next hunt number for this stage
-    const existingHunts = await prisma.hunt.findMany({
-        where: { stageId },
-        select: { huntNumber: true },
-        orderBy: { huntNumber: 'desc' },
-        take: 1
-    });
-    const nextHuntNumber = existingHunts.length > 0 ? (existingHunts[0].huntNumber ?? 0) + 1 : 1;
+    try {
+        // Find the next hunt number for this stage
+        const existingHunts = await prisma.hunt.findMany({
+            where: { stageId },
+            select: { huntNumber: true },
+            orderBy: { huntNumber: 'desc' },
+            take: 1
+        });
+        const nextHuntNumber = existingHunts.length > 0 ? (existingHunts[0].huntNumber ?? 0) + 1 : 1;
 
-    // Create a hunt for this clue set and stage
-    const hunt = await prisma.hunt.create({
-        data: {
-            name: `${name} Hunt`,
-            description: `Hunt for ${name} (Level ${level}, Stage ${stage})`,
-            clueSetId: clueSet.id,
-            stageId: stageId,
-            huntNumber: nextHuntNumber
-        }
-    });
-
-    // Store generated clues
-    for (let i = 0; i < generatedClues.length; i++) {
-        await prisma.clue.create({
+        // Create a hunt for this clue set and stage
+        const hunt = await prisma.hunt.create({
             data: {
-                clueNumber: i + 1,
-                question: generatedClues[i].clue,
-                type: generatedClues[i].type,
-                huntId: hunt.id
+                name: `${name} Hunt`,
+                description: `Hunt for ${name} (Level ${level}, Stage ${stage})`,
+                clueSetId: clueSet.id,
+                stageId: stageId,
+                huntNumber: nextHuntNumber
             }
         });
-    }
 
-    return clueSet;
+        // Store generated clues
+        for (let i = 0; i < generatedClues.length; i++) {
+            await prisma.clue.create({
+                data: {
+                    clueNumber: i + 1,
+                    question: generatedClues[i].question,
+                    answer: generatedClues[i].answer,
+                    hint: generatedClues[i].hint,
+                    type: generatedClues[i].type,
+                    huntId: hunt.id
+                }
+            });
+        }
+        return clueSet;
+    } catch (err: unknown) {
+        // Propagate OpenAI errors up
+        if (err instanceof Error) {
+            throw new Error('Failed to create hunt and clues: ' + err.message);
+        }
+        throw new Error('Failed to create hunt and clues: Unknown error');
+    }
 }
 
 /**
@@ -388,80 +513,121 @@ export async function createClueSet(options: CreateClueSetOptions) {
  * Get or create clues for a clue set
  */
 
-export async function getCluesForClueSet(clueSetId: string, stageId: string) {
+export async function getCluesForClueSet(
+    clueSetId: string,
+    stageId: string
+): Promise<Array<{ id: string; name: string; description: string | null; clues: Array<{ id: string; clueNumber: number; question: string; type: string; huntId: string }> }>> {
     // Check if hunts already exist for this clue set and stage
-    const existingHunts = await prisma.hunt.findMany({
-        where: {
-            clueSetId: clueSetId,
-            stageId: stageId
-        },
-        include: {
-            clues: {
-                orderBy: { clueNumber: 'asc' }
+    try {
+        const existingHunts = await prisma.hunt.findMany({
+            where: {
+                clueSetId,
+                stageId
+            },
+            include: {
+                clues: {
+                    orderBy: { clueNumber: 'asc' }
+                }
             }
+        });
+        if (existingHunts.length > 0) {
+            return existingHunts;
         }
-    });
-
-    if (existingHunts.length > 0) {
-        return existingHunts;
+    } catch (err) {
+        throw new Error('Database error while checking for existing hunts: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
 
     // If no hunts exist, auto-generate clues and create hunt
-    const clueSet = await prisma.clueSet.findUnique({ where: { id: clueSetId } });
-    const stage = await prisma.stage.findUnique({ where: { id: stageId }, include: { level: true } });
-    if (!clueSet || !stage || !stage.level) {
-        throw new Error('ClueSet, Stage, or Level not found');
+    let clueSet;
+    let stage;
+    try {
+        clueSet = await prisma.clueSet.findUnique({ where: { id: clueSetId } });
+        stage = await prisma.stage.findUnique({ where: { id: stageId }, include: { level: true } });
+        if (!clueSet || !stage || !stage.level) {
+            throw new Error('ClueSet, Stage, or Level not found');
+        }
+    } catch (err) {
+        throw new Error('Database error while fetching clueSet or stage: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
-    const params: ClueGenerationParams = {
-        locationName: clueSet.name,
-        center: { lat: clueSet.centerLatitude, lng: clueSet.centerLongitude },
-        radiusKm: clueSet.radiusKm,
-        phase: 'PHASE_1',
-        level: stage.level.levelNumber,
-        stage: stage.stageNumber,
-        difficulty: stage.level.levelNumber <= 3 ? 'easy' : stage.level.levelNumber <= 6 ? 'medium' : 'hard',
-        cluesCount: 4
-    };
-    const generatedClues: GeneratedClue[] = await generateClues(params);
+
+    // Prepare parameters for AI clue generation
+    let generatedClues: { question: string; answer: string; hint?: string; type: ClueType }[];
+    try {
+        generatedClues = await generateAIClues(
+            clueSet.centerLatitude,
+            clueSet.centerLongitude,
+            stage.level.levelNumber <= 3 ? 'Easy' : stage.level.levelNumber <= 6 ? 'Intermediate' : 'Hard',
+            clueSet.name,
+            undefined,
+            4
+        );
+    } catch (err) {
+        throw new Error('AI clue generation failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+    try {
+        // Removed legacy generateClues usage; unified on generateAIClues above.
+    } catch (err) {
+        throw new Error('AI clue generation failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
 
     // Find the next hunt number for this stage
-    const existingHuntNumbers = await prisma.hunt.findMany({
-        where: { stageId },
-        select: { huntNumber: true },
-        orderBy: { huntNumber: 'desc' },
-        take: 1
-    });
-    const nextHuntNumber = existingHuntNumbers.length > 0 ? (existingHuntNumbers[0].huntNumber ?? 0) + 1 : 1;
+    let nextHuntNumber = 1;
+    try {
+        const existingHuntNumbers = await prisma.hunt.findMany({
+            where: { stageId },
+            select: { huntNumber: true },
+            orderBy: { huntNumber: 'desc' },
+            take: 1
+        });
+        nextHuntNumber = existingHuntNumbers.length > 0 ? (existingHuntNumbers[0].huntNumber ?? 0) + 1 : 1;
+    } catch (err) {
+        throw new Error('Database error while determining next hunt number: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
 
     // Create a hunt for this clue set and stage
-    const hunt = await prisma.hunt.create({
-        data: {
-            name: `${clueSet.name} Hunt`,
-            description: `Hunt for ${clueSet.name} (Level ${stage.level.levelNumber}, Stage ${stage.stageNumber})`,
-            clueSetId: clueSet.id,
-            stageId: stage.id,
-            huntNumber: nextHuntNumber
-        }
-    });
-
-    // Store generated clues
-    for (let i = 0; i < generatedClues.length; i++) {
-        await prisma.clue.create({
+    let hunt;
+    try {
+        hunt = await prisma.hunt.create({
             data: {
-                clueNumber: i + 1,
-                question: generatedClues[i].clue,
-                type: generatedClues[i].type,
-                huntId: hunt.id
+                name: `${clueSet.name} Hunt`,
+                description: `Hunt for ${clueSet.name} (Level ${stage.level.levelNumber}, Stage ${stage.stageNumber})`,
+                clueSetId: clueSet.id,
+                stageId: stage.id,
+                huntNumber: nextHuntNumber
             }
         });
+    } catch (err) {
+        throw new Error('Database error while creating hunt: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+
+    // Store generated clues
+    try {
+        for (let i = 0; i < generatedClues.length; i++) {
+            await prisma.clue.create({
+                data: {
+                    clueNumber: i + 1,
+                    question: generatedClues[i].question,
+                    answer: generatedClues[i].answer,
+                    hint: generatedClues[i].hint,
+                    type: generatedClues[i].type,
+                    huntId: hunt.id
+                }
+            });
+        }
+    } catch (err) {
+        throw new Error('Database error while storing generated clues: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
 
     // Return the newly created hunt with clues
-    const newHunt = await prisma.hunt.findUnique({
-        where: { id: hunt.id },
-        include: {
-            clues: { orderBy: { clueNumber: 'asc' } }
-        }
-    });
-    return newHunt ? [newHunt] : [];
+    try {
+        const newHunt = await prisma.hunt.findUnique({
+            where: { id: hunt.id },
+            include: {
+                clues: { orderBy: { clueNumber: 'asc' } }
+            }
+        });
+        return newHunt ? [newHunt] : [];
+    } catch (err) {
+        throw new Error('Database error while fetching new hunt: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
 }

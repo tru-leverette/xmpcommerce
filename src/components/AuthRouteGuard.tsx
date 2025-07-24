@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
 
 interface AuthRouteGuardProps {
   children: React.ReactNode
@@ -14,8 +14,8 @@ export default function AuthRouteGuard({ children }: AuthRouteGuardProps) {
 
   useEffect(() => {
     const checkAuth = () => {
-      const token = localStorage.getItem('token')
-      
+      const token = sessionStorage.getItem('token')
+
       if (token) {
         // User is logged in, redirect to dashboard
         setShouldRedirect(true)

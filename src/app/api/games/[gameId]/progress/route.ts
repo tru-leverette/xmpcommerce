@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server'
-// import { prisma } from '@/lib/prisma'
-// import { verifyToken, getTokenFromHeader } from '@/lib/auth'
+
+import { verifyToken } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { NextRequest, NextResponse } from 'next/server';
 
 // GET user's current progress for a game
 export async function GET(
@@ -8,107 +9,80 @@ export async function GET(
     { params }: { params: Promise<{ gameId: string }> }
 ) {
     try {
-        const { gameId } = await params // eslint-disable-line @typescript-eslint/no-unused-vars
-
-        // Authentication would be checked here
-        // const authHeader = request.headers.get('authorization')
-        // const token = getTokenFromHeader(authHeader)
-        // if (!token) {
-        //   return NextResponse.json(
-        //     { error: 'Authentication required' },
-        //     { status: 401 }
-        //   )
-        // }
-
-        // const decoded = verifyToken(token)
-
-        // In production, query user's progress from database:
-        // const participant = await prisma.participant.findUnique({
-        //   where: {
-        //     userId_gameId: {
-        //       userId: decoded.userId,
-        //       gameId
-        //     }
-        //   },
-        //   include: {
-        //     clueSubmissions: {
-        //       where: { isCorrect: true },
-        //       orderBy: { createdAt: 'asc' }
-        //     }
-        //   }
-        // })
-
-        // For now, return mock progress data
-        // In a real app, this would come from database queries
-        const mockProgress = {
-            // Current position in game
-            currentLevel: 1,
-            currentStage: 1,
-            currentHunt: 1,
-            currentClue: 1,
-            currentClueNumber: 1, // For simplified UI display (backwards compatibility)
-
-            // Completion status
-            isStageCompleted: false,
-            isLevelCompleted: false,
-            isGameComplete: false,
-            stagesCompletedInLevel: 0,
-
-            // Advancement eligibility
-            canAdvanceToNextStage: false,
-            canAdvanceToNextLevel: false,
-
-            // Resources
-            pebbles: 1000, // Starting amount
-            scavengerStones: 0,
-
-            // Location tracking
-            lastLocation: {
-                latitude: null,
-                longitude: null,
-                isValid: false
-            },
-
-      // Completed items (arrays of IDs)
-      completedClues: [], // ClueSubmission IDs where isCorrect=true
-      completedHunts: [],
-      completedStages: [],
-      completedLevels: [],
-      
-      // Badges earned
-      badges: [
-        // {
-        //   id: "badge-1",
-        //   name: "Stage 1 Explorer", 
-        //   badgeType: "STAGE",
-        //   levelNumber: 1,
-        //   stageNumber: 1,
-        //   earnedAt: "2025-07-16T10:30:00Z"
-        // }
-      ],
-      
-      // Game metadata
-      totalClues: 4, // 4 clues per stage (simplified for current system)
-      totalLevels: 12,
-      totalStagesPerLevel: 4,
-      totalCluesPerStage: 4,
-
-            // Timestamps
-            startedAt: new Date().toISOString(),
-            lastPlayedAt: new Date().toISOString(),
-            completedAt: null
+        const { gameId } = await params;
+        // Authentication
+        const authHeader = request.headers.get('authorization');
+        if (!authHeader || !authHeader.startsWith('Bearer ')) {
+            return NextResponse.json({ error: 'Authentication required' }, { status: 401 });
+        }
+        const token = authHeader.substring(7);
+        const decoded = verifyToken(token);
+        if (!decoded) {
+            return NextResponse.json({ error: 'Invalid or expired authentication token' }, { status: 401 });
         }
 
-        return NextResponse.json({
-            progress: mockProgress
-        })
+        // Find participant for this user/game
+        const participant = await prisma.participant.findFirst({
+            where: {
+                userId: decoded.userId,
+                gameId: gameId
+            },
+            include: {
+                progress: true,
+                submissions: {
+                    where: { isCorrect: true },
+                    orderBy: { submittedAt: 'asc' }
+                }
+            }
+        });
+        if (!participant) {
+            return NextResponse.json({ error: 'No progress found for this user in this game' }, { status: 404 });
+        }
 
+        // Use the first progress record (if any)
+        const progress = Array.isArray(participant.progress) && participant.progress.length > 0 ? participant.progress[0] : null;
+        const currentStage = progress?.stageId || null;
+        const currentLevel = progress?.currentLevel || 1;
+        const currentHunt = progress?.currentHunt || 1;
+        const currentClue = progress?.currentClue || 1;
+
+        // Compose response
+        const result = {
+            currentLevel,
+            currentStage,
+            currentHunt,
+            currentClue,
+            currentClueNumber: currentClue,
+            isStageCompleted: progress?.isStageCompleted ?? false,
+            isLevelCompleted: progress?.isLevelCompleted ?? false,
+            isGameComplete: false, // TODO: implement
+            stagesCompletedInLevel: progress?.stagesCompletedInLevel ?? 0,
+            canAdvanceToNextStage: progress?.canAdvanceToNextStage ?? false,
+            canAdvanceToNextLevel: progress?.canAdvanceToNextLevel ?? false,
+            pebbles: participant.pebbles ?? 0,
+            scavengerStones: participant.scavengerStones ?? 0,
+            lastLocation: {
+                latitude: participant.currentLatitude ?? null,
+                longitude: participant.currentLongitude ?? null,
+                isValid: typeof participant.currentLatitude === 'number' && typeof participant.currentLongitude === 'number'
+            },
+            completedClues: participant.submissions.map((cs: { id: string }) => cs.id),
+            completedHunts: [],
+            completedStages: [],
+            completedLevels: [],
+            badges: [],
+            totalClues: 4, // TODO: fetch from game config
+            totalLevels: 12, // TODO: fetch from game config
+            totalStagesPerLevel: 4, // TODO: fetch from game config
+            totalCluesPerStage: 4, // TODO: fetch from game config
+            startedAt: participant.joinedAt?.toISOString() ?? null,
+            lastPlayedAt: participant.updatedAt?.toISOString() ?? null,
+            completedAt: progress?.completedAt?.toISOString() ?? null
+        };
+        return NextResponse.json({ progress: result });
     } catch (error) {
-        console.error('Error fetching progress:', error)
-        return NextResponse.json(
-            { error: 'Internal server error' },
-            { status: 500 }
-        )
+        console.error('Error fetching progress:', error);
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
 

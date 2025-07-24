@@ -77,27 +77,6 @@ export default function AdminDashboard() {
   const [updatingGame, setUpdatingGame] = useState<string | null>(null)
   const [deletingGame, setDeletingGame] = useState<string | null>(null)
 
-  // Game management modal states
-  const [showGameManageModal, setShowGameManageModal] = useState(false)
-  const [selectedGame, setSelectedGame] = useState<Game | null>(null)
-  const [manageGameForm, setManageGameForm] = useState({
-    title: '',
-    description: '',
-    location: '',
-    status: '',
-    launchDate: '',
-    region: '',
-    minLatitude: '',
-    maxLatitude: '',
-    minLongitude: '',
-    maxLongitude: '',
-    totalLevels: '',
-    stagesPerLevel: '',
-    cluesPerStage: ''
-  })
-  const [manageGameErrors, setManageGameErrors] = useState<{ [key: string]: string }>({})
-  const [updatingManagedGame, setUpdatingManagedGame] = useState(false)
-
   // Password confirmation for deletion
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false)
   const [gameToDelete, setGameToDelete] = useState<string | null>(null)
@@ -120,7 +99,7 @@ export default function AdminDashboard() {
 
   const verifyAdminAccess = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       if (!token) {
         console.warn('No token found - redirecting to login')
         window.location.href = '/auth/login?redirect=/admin'
@@ -148,7 +127,7 @@ export default function AdminDashboard() {
 
       if (!response.ok) {
         console.warn('Token invalid or insufficient permissions - redirecting to login')
-        localStorage.clear() // Clear invalid token
+        sessionStorage.clear() // Clear invalid token
         window.location.href = '/auth/login?redirect=/admin&reason=invalid_token'
         return
       }
@@ -163,7 +142,7 @@ export default function AdminDashboard() {
       await fetchActivities()
     } catch (error) {
       console.error('Admin access verification failed:', error)
-      localStorage.clear()
+      sessionStorage.clear()
       window.location.href = '/auth/login?redirect=/admin&reason=verification_failed'
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -176,7 +155,7 @@ export default function AdminDashboard() {
 
   const fetchCurrentUser = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       if (token) {
         // Server-side verification happens in verifyAdminAccess
         // This is just for UI display purposes
@@ -191,7 +170,7 @@ export default function AdminDashboard() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch('/api/admin/users', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -209,7 +188,7 @@ export default function AdminDashboard() {
 
   const fetchGames = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch('/api/games', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -239,7 +218,7 @@ export default function AdminDashboard() {
   const fetchActivities = useCallback(async (page: number = 1) => {
     try {
       setLoadingActivities(true)
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch(`/api/activities?page=${page}&limit=20`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -381,7 +360,7 @@ export default function AdminDashboard() {
 
     setCreatingGame(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch('/api/games', {
         method: 'POST',
         headers: {
@@ -460,7 +439,7 @@ export default function AdminDashboard() {
 
     setUpdatingGame(gameId)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch(`/api/games/${gameId}`, {
         method: 'PATCH',
         headers: {
@@ -525,7 +504,7 @@ export default function AdminDashboard() {
 
     setDeletingGame(gameToDelete)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch(`/api/games/${gameToDelete}`, {
         method: 'DELETE',
         headers: {
@@ -567,171 +546,10 @@ export default function AdminDashboard() {
     setDeletePasswordError('')
   }
 
-  // Game management modal functions
-  const openGameManageModal = (game: Game) => {
-    setSelectedGame(game)
-    setManageGameForm({
-      title: game.title,
-      description: game.description,
-      location: game.location,
-      status: game.status,
-      launchDate: game.launchDate || '',
-      region: game.region || '',
-      minLatitude: game.minLatitude?.toString() || '',
-      maxLatitude: game.maxLatitude?.toString() || '',
-      minLongitude: game.minLongitude?.toString() || '',
-      maxLongitude: game.maxLongitude?.toString() || '',
-      totalLevels: game.totalLevels.toString(),
-      stagesPerLevel: game.stagesPerLevel.toString(),
-      cluesPerStage: game.cluesPerStage.toString()
-    })
-    setManageGameErrors({})
-    setShowGameManageModal(true)
-  }
-
-  const closeGameManageModal = () => {
-    setShowGameManageModal(false)
-    setSelectedGame(null)
-    setManageGameForm({
-      title: '',
-      description: '',
-      location: '',
-      status: '',
-      launchDate: '',
-      region: '',
-      minLatitude: '',
-      maxLatitude: '',
-      minLongitude: '',
-      maxLongitude: '',
-      totalLevels: '',
-      stagesPerLevel: '',
-      cluesPerStage: ''
-    })
-    setManageGameErrors({})
-  }
-
-  const handleManageGameInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target
-    setManageGameForm(prev => ({
-      ...prev,
-      [name]: value
-    }))
-    // Clear error when user starts typing
-    if (manageGameErrors[name]) {
-      setManageGameErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }))
-    }
-  }
-
-  const validateManageGameForm = () => {
-    const errors: { [key: string]: string } = {}
-
-    if (!manageGameForm.title.trim()) {
-      errors.title = 'Title is required'
-    }
-
-    if (!manageGameForm.description.trim()) {
-      errors.description = 'Description is required'
-    }
-
-    if (!manageGameForm.location) {
-      errors.location = 'Location is required'
-    }
-
-    if (!manageGameForm.status) {
-      errors.status = 'Status is required'
-    }
-
-    if (manageGameForm.totalLevels && (isNaN(Number(manageGameForm.totalLevels)) || Number(manageGameForm.totalLevels) < 1)) {
-      errors.totalLevels = 'Total levels must be a positive number'
-    }
-
-    if (manageGameForm.stagesPerLevel && (isNaN(Number(manageGameForm.stagesPerLevel)) || Number(manageGameForm.stagesPerLevel) < 1)) {
-      errors.stagesPerLevel = 'Stages per level must be a positive number'
-    }
-
-    if (manageGameForm.cluesPerStage && (isNaN(Number(manageGameForm.cluesPerStage)) || Number(manageGameForm.cluesPerStage) < 1)) {
-      errors.cluesPerStage = 'Clues per stage must be a positive number'
-    }
-
-    // Validate geolocation if provided
-    if (manageGameForm.minLatitude && (isNaN(Number(manageGameForm.minLatitude)) || Number(manageGameForm.minLatitude) < -90 || Number(manageGameForm.minLatitude) > 90)) {
-      errors.minLatitude = 'Minimum latitude must be between -90 and 90'
-    }
-
-    if (manageGameForm.maxLatitude && (isNaN(Number(manageGameForm.maxLatitude)) || Number(manageGameForm.maxLatitude) < -90 || Number(manageGameForm.maxLatitude) > 90)) {
-      errors.maxLatitude = 'Maximum latitude must be between -90 and 90'
-    }
-
-    if (manageGameForm.minLongitude && (isNaN(Number(manageGameForm.minLongitude)) || Number(manageGameForm.minLongitude) < -180 || Number(manageGameForm.minLongitude) > 180)) {
-      errors.minLongitude = 'Minimum longitude must be between -180 and 180'
-    }
-
-    if (manageGameForm.maxLongitude && (isNaN(Number(manageGameForm.maxLongitude)) || Number(manageGameForm.maxLongitude) < -180 || Number(manageGameForm.maxLongitude) > 180)) {
-      errors.maxLongitude = 'Maximum longitude must be between -180 and 180'
-    }
-
-    return errors
-  }
-
-  const updateManagedGame = async () => {
-    if (!selectedGame) return
-
-    const errors = validateManageGameForm()
-    if (Object.keys(errors).length > 0) {
-      setManageGameErrors(errors)
-      return
-    }
-
-    setUpdatingManagedGame(true)
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch(`/api/games/${selectedGame.id}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          title: manageGameForm.title,
-          description: manageGameForm.description,
-          location: manageGameForm.location,
-          status: manageGameForm.status,
-          launchDate: manageGameForm.launchDate || null,
-          region: manageGameForm.region || null,
-          minLatitude: manageGameForm.minLatitude ? Number(manageGameForm.minLatitude) : null,
-          maxLatitude: manageGameForm.maxLatitude ? Number(manageGameForm.maxLatitude) : null,
-          minLongitude: manageGameForm.minLongitude ? Number(manageGameForm.minLongitude) : null,
-          maxLongitude: manageGameForm.maxLongitude ? Number(manageGameForm.maxLongitude) : null,
-          totalLevels: Number(manageGameForm.totalLevels),
-          stagesPerLevel: Number(manageGameForm.stagesPerLevel),
-          cluesPerStage: Number(manageGameForm.cluesPerStage)
-        })
-      })
-
-      const data = await response.json()
-
-      if (response.ok) {
-        toast.success('Game updated successfully!')
-        fetchGames() // Refresh the list
-        closeGameManageModal()
-      } else {
-        toast.error(data.error || 'Failed to update game')
-      }
-    } catch (error) {
-      console.error('Error updating game:', error)
-      toast.error('Error updating game')
-    } finally {
-      setUpdatingManagedGame(false)
-    }
-  }
-
   const updateUser = async (userId: string, action: string, role?: string) => {
     setUpdating(userId)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: 'PATCH',
         headers: {
@@ -1385,12 +1203,12 @@ export default function AdminDashboard() {
                                     </button>
                                   </>
                                 )}
-                                <button
-                                  onClick={() => openGameManageModal(game)}
-                                  className="text-green-600 hover:text-green-900"
+                                <Link
+                                  href={`/admin/games/${game.id}`}
+                                  className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-medium"
                                 >
                                   Manage
-                                </button>
+                                </Link>
                               </>
                             )}
                           </td>
@@ -1646,298 +1464,6 @@ export default function AdminDashboard() {
                 >
                   {deletingGame ? 'Deleting...' : 'Delete Game'}
                 </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Game Management Modal */}
-        {showGameManageModal && selectedGame && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Manage Game: {selectedGame.title}</h2>
-                <button
-                  onClick={closeGameManageModal}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Basic Information */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
-                    <input
-                      type="text"
-                      name="title"
-                      value={manageGameForm.title}
-                      onChange={handleManageGameInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled={currentUserRole !== 'SUPERADMIN'}
-                    />
-                    {manageGameErrors.title && (
-                      <p className="text-red-500 text-sm mt-1">{manageGameErrors.title}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                    <textarea
-                      name="description"
-                      value={manageGameForm.description}
-                      onChange={handleManageGameInputChange}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled={currentUserRole !== 'SUPERADMIN'}
-                    />
-                    {manageGameErrors.description && (
-                      <p className="text-red-500 text-sm mt-1">{manageGameErrors.description}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
-                    <select
-                      name="location"
-                      value={manageGameForm.location}
-                      onChange={handleManageGameInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      disabled={currentUserRole !== 'SUPERADMIN'}
-                    >
-                      <option value="">Select a continent</option>
-                      <option value="Africa">Africa</option>
-                      <option value="Antarctica">Antarctica</option>
-                      <option value="Asia">Asia</option>
-                      <option value="Europe">Europe</option>
-                      <option value="North America">North America</option>
-                      <option value="Oceania">Oceania</option>
-                      <option value="South America">South America</option>
-                    </select>
-                    {manageGameErrors.location && (
-                      <p className="text-red-500 text-sm mt-1">{manageGameErrors.location}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                    <select
-                      name="status"
-                      value={manageGameForm.status}
-                      onChange={handleManageGameInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="">Select status</option>
-                      <option value="PENDING">Pending</option>
-                      <option value="UPCOMING">Upcoming</option>
-                      <option value="ACTIVE">Active</option>
-                      <option value="COMPLETED">Completed</option>
-                    </select>
-                    {manageGameErrors.status && (
-                      <p className="text-red-500 text-sm mt-1">{manageGameErrors.status}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Launch Date</label>
-                    <input
-                      type="datetime-local"
-                      name="launchDate"
-                      value={manageGameForm.launchDate}
-                      onChange={handleManageGameInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Game Configuration */}
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Game Configuration</h3>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Region</label>
-                    <input
-                      type="text"
-                      name="region"
-                      value={manageGameForm.region}
-                      onChange={handleManageGameInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., Eastern Africa"
-                      disabled={currentUserRole !== 'SUPERADMIN'}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Total Levels</label>
-                      <input
-                        type="number"
-                        name="totalLevels"
-                        value={manageGameForm.totalLevels}
-                        onChange={handleManageGameInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        min="1"
-                        disabled={currentUserRole !== 'SUPERADMIN'}
-                      />
-                      {manageGameErrors.totalLevels && (
-                        <p className="text-red-500 text-xs mt-1">{manageGameErrors.totalLevels}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Stages/Level</label>
-                      <input
-                        type="number"
-                        name="stagesPerLevel"
-                        value={manageGameForm.stagesPerLevel}
-                        onChange={handleManageGameInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        min="1"
-                        disabled={currentUserRole !== 'SUPERADMIN'}
-                      />
-                      {manageGameErrors.stagesPerLevel && (
-                        <p className="text-red-500 text-xs mt-1">{manageGameErrors.stagesPerLevel}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Clues/Stage</label>
-                      <input
-                        type="number"
-                        name="cluesPerStage"
-                        value={manageGameForm.cluesPerStage}
-                        onChange={handleManageGameInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        min="1"
-                        disabled={currentUserRole !== 'SUPERADMIN'}
-                      />
-                      {manageGameErrors.cluesPerStage && (
-                        <p className="text-red-500 text-xs mt-1">{manageGameErrors.cluesPerStage}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Geolocation Bounds */}
-                  <div>
-                    <h4 className="text-md font-semibold text-gray-800 mb-3">Geolocation Bounds (Optional)</h4>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Min Latitude</label>
-                        <input
-                          type="number"
-                          name="minLatitude"
-                          value={manageGameForm.minLatitude}
-                          onChange={handleManageGameInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          step="0.000001"
-                          min="-90"
-                          max="90"
-                          placeholder="-90 to 90"
-                          disabled={currentUserRole !== 'SUPERADMIN'}
-                        />
-                        {manageGameErrors.minLatitude && (
-                          <p className="text-red-500 text-xs mt-1">{manageGameErrors.minLatitude}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Max Latitude</label>
-                        <input
-                          type="number"
-                          name="maxLatitude"
-                          value={manageGameForm.maxLatitude}
-                          onChange={handleManageGameInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          step="0.000001"
-                          min="-90"
-                          max="90"
-                          placeholder="-90 to 90"
-                          disabled={currentUserRole !== 'SUPERADMIN'}
-                        />
-                        {manageGameErrors.maxLatitude && (
-                          <p className="text-red-500 text-xs mt-1">{manageGameErrors.maxLatitude}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Min Longitude</label>
-                        <input
-                          type="number"
-                          name="minLongitude"
-                          value={manageGameForm.minLongitude}
-                          onChange={handleManageGameInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          step="0.000001"
-                          min="-180"
-                          max="180"
-                          placeholder="-180 to 180"
-                          disabled={currentUserRole !== 'SUPERADMIN'}
-                        />
-                        {manageGameErrors.minLongitude && (
-                          <p className="text-red-500 text-xs mt-1">{manageGameErrors.minLongitude}</p>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Max Longitude</label>
-                        <input
-                          type="number"
-                          name="maxLongitude"
-                          value={manageGameForm.maxLongitude}
-                          onChange={handleManageGameInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          step="0.000001"
-                          min="-180"
-                          max="180"
-                          placeholder="-180 to 180"
-                          disabled={currentUserRole !== 'SUPERADMIN'}
-                        />
-                        {manageGameErrors.maxLongitude && (
-                          <p className="text-red-500 text-xs mt-1">{manageGameErrors.maxLongitude}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Game Statistics */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h4 className="text-md font-semibold text-gray-800 mb-2">Game Statistics</h4>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">Participants:</span>
-                        <span className="ml-2 font-medium">{selectedGame._count.participants}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">Created:</span>
-                        <span className="ml-2 font-medium">{new Date(selectedGame.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end space-x-4 mt-8 pt-6 border-t border-gray-200">
-                <button
-                  onClick={closeGameManageModal}
-                  className="px-6 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  Cancel
-                </button>
-                {(currentUserRole === 'SUPERADMIN' || currentUserRole === 'ADMIN') && (
-                  <button
-                    onClick={updateManagedGame}
-                    disabled={updatingManagedGame}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {updatingManagedGame ? 'Updating...' : 'Update Game'}
-                  </button>
-                )}
               </div>
             </div>
           </div>

@@ -116,8 +116,8 @@ export const ERROR_MESSAGES = {
 // Log error to server and create activity record
 export async function logError(errorDetails: ErrorDetails): Promise<void> {
     try {
-        const token = localStorage.getItem('token')
-        const userId = localStorage.getItem('userId')
+        const token = sessionStorage.getItem('token')
+        const userId = sessionStorage.getItem('userId')
 
         // Enhanced error details
         const fullErrorDetails = {
