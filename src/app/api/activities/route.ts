@@ -108,41 +108,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Handle anonymous users by creating a system user or skipping user association
-    let finalUserId = userId
-
-    // If userId is 'anonymous' or undefined, try to create/find a system user
-    if (!userId || userId === 'anonymous') {
-      // Try to find or create a system user for anonymous activities
-      let systemUser = await prisma.user.findUnique({
-        where: { email: 'system@xmpcommerce.com' }
-      })
-
-      if (!systemUser) {
-        // Create a system user for anonymous activities
-        systemUser = await prisma.user.create({
-          data: {
-            email: 'system@xmpcommerce.com',
-            username: 'system',
-            password: 'system-account-not-for-login',
-            role: 'USER'
-          }
-        })
-      }
-
-      finalUserId = systemUser.id
-    } else {
-      // Verify the user exists
-      const userExists = await prisma.user.findUnique({
-        where: { id: userId }
-      })
-
-      if (!userExists) {
-        // If user doesn't exist, use system user
+    let finalUserId = userId;
+    try {
+      if (!userId || userId === 'anonymous') {
+        // Try to find or create a system user for anonymous activities
         let systemUser = await prisma.user.findUnique({
           where: { email: 'system@xmpcommerce.com' }
-        })
-
+        });
         if (!systemUser) {
+          // Create a system user for anonymous activities
           systemUser = await prisma.user.create({
             data: {
               email: 'system@xmpcommerce.com',
@@ -150,40 +124,71 @@ export async function POST(request: NextRequest) {
               password: 'system-account-not-for-login',
               role: 'USER'
             }
-          })
+          });
         }
-
-        finalUserId = systemUser.id
+        finalUserId = systemUser.id;
+      } else {
+        // Verify the user exists
+        const userExists = await prisma.user.findUnique({
+          where: { id: userId }
+        });
+        if (!userExists) {
+          // If user doesn't exist, use system user
+          let systemUser = await prisma.user.findUnique({
+            where: { email: 'system@xmpcommerce.com' }
+          });
+          if (!systemUser) {
+            systemUser = await prisma.user.create({
+              data: {
+                email: 'system@xmpcommerce.com',
+                username: 'system',
+                password: 'system-account-not-for-login',
+                role: 'USER'
+              }
+            });
+          }
+          finalUserId = systemUser.id;
+        }
       }
+    } catch (userError) {
+      // If we can't create/find a user, log a warning and continue without user association
+      console.warn('Activity logging: Could not associate user, logging anonymously.', userError);
+      finalUserId = undefined;
     }
 
-    const activity = await prisma.activity.create({
-      data: {
-        type,
-        description,
-        details: details || {},
-        userId: finalUserId
-      },
-      include: {
-        user: {
-          select: {
-            username: true,
-            email: true
+    try {
+      const activity = await prisma.activity.create({
+        data: {
+          type,
+          description,
+          details: details || {},
+          userId: finalUserId
+        },
+        include: {
+          user: {
+            select: {
+              username: true,
+              email: true
+            }
           }
         }
-      }
-    })
-
-    return NextResponse.json({
-      message: 'Activity logged successfully',
-      activity
-    })
-
+      });
+      return NextResponse.json({
+        message: 'Activity logged successfully',
+        activity
+      });
+    } catch (activityError) {
+      // If activity cannot be logged, do not throw 500, just warn
+      console.warn('Activity logging failed, but not fatal:', activityError);
+      return NextResponse.json({
+        message: 'Activity not logged, but this does not affect your game experience.'
+      }, { status: 200 });
+    }
   } catch (error) {
-    console.error('Error creating activity:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    // This should never be hit, but just in case
+    console.error('Error creating activity (outer catch):', error);
+    return NextResponse.json({
+      message: 'Activity not logged, but this does not affect your game experience.'
+    }, { status: 200 });
   }
 }

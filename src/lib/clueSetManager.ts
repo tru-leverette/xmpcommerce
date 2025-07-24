@@ -97,8 +97,68 @@ export async function findDifferentGroupClueSet(gameId: string, location: Locati
  */
 
 
-import { ClueGenerationParams, generateClues, GeneratedClue } from './openaiClueGenerator';
-import { prisma } from './prisma';
+import { ClueType, PrismaClient } from '@prisma/client';
+// import path from 'path';
+// import { NextRequest } from 'next/server';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { default: OpenAI } = require('openai');
+
+const prisma = new PrismaClient();
+
+type DifficultyText = 'Easy' | 'Intermediate' | 'Hard' | 'Difficult';
+
+async function generateAIClues(
+    latitude: number,
+    longitude: number,
+    difficulty: DifficultyText,
+    mainTarget?: string,
+    theme?: string,
+    numClues: number = 2
+): Promise<{ question: string; answer: string; hint?: string; type: ClueType }[]> {
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable is not set.');
+    const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
+    const prompt = `Generate ${numClues} scavenger hunt clues and answers as a logical progression, where each clue leads to the next, culminating in a final goal. The clues must be connected, with each clue's answer or location providing the context or access for the next clue. The final clue should lead to the ultimate goal or location.\n\nParameters:\n- Difficulty Level: ${difficulty}\n- Main Target: ${mainTarget || "(infer based on difficulty and theme)"}\n- Theme: ${theme || "(select based on prior narrative)"}\n\nRequirements:\n1. The clues must form a chain: each clue should logically lead to the next, and the final clue should reveal or require the ultimate goal.\n2. Each clue must include a clear, concise, and unambiguous answer in the 'answer' field. Do not leave the answer blank or vague.\n3. Each clue should be logically solvable, with subtle hints that encourage deduction.\n4. Clues should reflect the selected theme and target (or inferred ones) while maintaining narrative continuity and progression.\n5. Difficulty should influence complexity of clue structure—higher levels include layered metaphors, wordplay, or symbolic references.\n6. Output only a JSON array, no explanations or extra text. Each clue must have: question, answer, (optional) hint, and type.\n\nExample of a progressive clue chain:\n[\n  {"question": "Go to the restaurant downtown known for its deep-dish pizza and take a selfie outside.", "answer": "Photo at Giordano's restaurant", "type": "PHOTO_UPLOAD"},\n  {"question": "Now, visit the golf course where Chicago's famous baseball player relaxes. Take a selfie in the lobby.", "answer": "Photo at Harborside International Golf Center lobby", "type": "PHOTO_UPLOAD"},\n  {"question": "Finally, find the parking space number 22 at Wrigley Field and take a selfie there.", "answer": "Photo at parking space 22, Wrigley Field", "type": "PHOTO_UPLOAD"}\n]\n\nRespond in JSON array format, e.g.:\n[\n  {"question": "...", "answer": "...", "hint": "...", "type": "TEXT_ANSWER"},\n  {"question": "...", "answer": "...", "type": "PHOTO_UPLOAD"}\n]`;
+    const completion = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+            { role: 'system', content: 'You are a helpful scavenger hunt clue generator.' },
+            { role: 'user', content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 600,
+    });
+    const content = completion.choices[0]?.message?.content;
+    if (!content) throw new Error('No content from OpenAI');
+    let clues: { question: string; answer: string; hint?: string; type: ClueType }[] = [];
+    try {
+        clues = JSON.parse(content);
+    } catch {
+        throw new Error('Failed to parse AI response as JSON: ' + content);
+    }
+    if (!Array.isArray(clues) || clues.length === 0) {
+        throw new Error('No clues returned from AI');
+    }
+    const validatedClues = clues.map((clue, idx) => {
+        if (
+            typeof clue.question !== 'string' ||
+            typeof clue.answer !== 'string' ||
+            clue.question.trim().length <= 1 ||
+            clue.answer.trim().length <= 1
+        ) {
+            throw new Error(`Clue or answer missing, invalid, or too short at index ${idx}`);
+        }
+        return {
+            question: clue.question,
+            answer: clue.answer,
+            hint: typeof clue.hint === 'string' ? clue.hint : undefined,
+            type: clue.type === 'PHOTO_UPLOAD' ? 'PHOTO_UPLOAD' as ClueType : 'TEXT_ANSWER' as ClueType,
+        };
+    });
+    return validatedClues;
+}
+// import { prisma } from './prisma';
 
 export interface Location {
     lat: number
@@ -355,7 +415,7 @@ export async function createClueSet(options: CreateClueSetOptions) {
     const location: Location = options.location;
     const name: string = options.name;
     const description: string = options.description ?? '';
-    const phase: string = options.phase ?? 'PHASE_1';
+    // phase is not used; removed to resolve lint error.
     const level: number = options.level ?? 1;
     const stage: number = options.stage ?? 1;
     const cluesCount: number = options.cluesCount ?? 4;
@@ -392,17 +452,14 @@ export async function createClueSet(options: CreateClueSetOptions) {
     });
 
     // Generate clues using OpenAI
-    const params: ClueGenerationParams = {
-        locationName: name,
-        center: { lat: optimalLocation.lat, lng: optimalLocation.lng },
-        radiusKm,
-        phase,
-        level,
-        stage,
-        difficulty: level <= 3 ? 'easy' : level <= 6 ? 'medium' : 'hard',
+    const generatedClues = await generateAIClues(
+        optimalLocation.lat,
+        optimalLocation.lng,
+        level <= 3 ? 'Easy' : level <= 6 ? 'Intermediate' : 'Hard',
+        name,
+        undefined,
         cluesCount
-    };
-    const generatedClues: GeneratedClue[] = await generateClues(params);
+    );
 
     try {
         // Find the next hunt number for this stage
@@ -430,7 +487,9 @@ export async function createClueSet(options: CreateClueSetOptions) {
             await prisma.clue.create({
                 data: {
                     clueNumber: i + 1,
-                    question: generatedClues[i].clue,
+                    question: generatedClues[i].question,
+                    answer: generatedClues[i].answer,
+                    hint: generatedClues[i].hint,
                     type: generatedClues[i].type,
                     huntId: hunt.id
                 }
@@ -492,19 +551,21 @@ export async function getCluesForClueSet(
     }
 
     // Prepare parameters for AI clue generation
-    const params: ClueGenerationParams = {
-        locationName: clueSet.name,
-        center: { lat: clueSet.centerLatitude, lng: clueSet.centerLongitude },
-        radiusKm: clueSet.radiusKm,
-        phase: 'PHASE_1',
-        level: stage.level.levelNumber,
-        stage: stage.stageNumber,
-        difficulty: stage.level.levelNumber <= 3 ? 'easy' : stage.level.levelNumber <= 6 ? 'medium' : 'hard',
-        cluesCount: 4
-    };
-    let generatedClues: GeneratedClue[];
+    let generatedClues: { question: string; answer: string; hint?: string; type: ClueType }[];
     try {
-        generatedClues = await generateClues(params);
+        generatedClues = await generateAIClues(
+            clueSet.centerLatitude,
+            clueSet.centerLongitude,
+            stage.level.levelNumber <= 3 ? 'Easy' : stage.level.levelNumber <= 6 ? 'Intermediate' : 'Hard',
+            clueSet.name,
+            undefined,
+            4
+        );
+    } catch (err) {
+        throw new Error('AI clue generation failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+    try {
+        // Removed legacy generateClues usage; unified on generateAIClues above.
     } catch (err) {
         throw new Error('AI clue generation failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
@@ -545,7 +606,9 @@ export async function getCluesForClueSet(
             await prisma.clue.create({
                 data: {
                     clueNumber: i + 1,
-                    question: generatedClues[i].clue,
+                    question: generatedClues[i].question,
+                    answer: generatedClues[i].answer,
+                    hint: generatedClues[i].hint,
                     type: generatedClues[i].type,
                     huntId: hunt.id
                 }

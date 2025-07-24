@@ -30,10 +30,8 @@
 /node_modules
 /out/
 GAME_RULES.md
-GAME_RULES.md
 next-env.d.ts
 npm-debug.log*
-SECURITY_AUDIT.md
 SECURITY_AUDIT.md
 yarn-debug.log*
 yarn-error.log*

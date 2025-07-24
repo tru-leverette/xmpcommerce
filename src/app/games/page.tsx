@@ -96,81 +96,96 @@ function Games() {
 
   // Handle continue game with geolocation capture
   const handleContinueGame = async (gameId: string, gameLocation: string) => {
-    setCapturingLocation(gameId)
-
+    setCapturingLocation(gameId);
     try {
       // Check if geolocation is available
       if (!navigator.geolocation) {
-        showToast.error('Geolocation is not supported by this browser')
-        setCapturingLocation(null)
-        return
+        showToast.error('Geolocation is not supported by this browser');
+        setCapturingLocation(null);
+        return;
       }
 
       // Check current permission status if available
-      let permissionStatus = 'unknown'
+      let permissionStatus = 'unknown';
       if ('permissions' in navigator) {
         try {
-          const permission = await navigator.permissions.query({ name: 'geolocation' })
-          permissionStatus = permission.state
-          console.log('Geolocation permission status:', permissionStatus)
+          const permission = await navigator.permissions.query({ name: 'geolocation' });
+          permissionStatus = permission.state;
+          console.log('Geolocation permission status:', permissionStatus);
         } catch {
-          console.log('Permissions API not supported, proceeding with geolocation request')
+          console.log('Permissions API not supported, proceeding with geolocation request');
         }
       }
 
-      // If permission is denied, show helpful message
       if (permissionStatus === 'denied') {
-        showToast.error('Location access is blocked. Please enable location sharing in your browser settings and refresh the page.')
-        setCapturingLocation(null)
-        return
+        showToast.error('Location access is blocked. Please enable location sharing in your browser settings and refresh the page.');
+        setCapturingLocation(null);
+        return;
       }
-
-      // If permission is not granted yet, show informative message
       if (permissionStatus === 'prompt') {
-        showToast.info('Location access needed. Please allow location sharing when prompted.')
+        showToast.info('Location access needed. Please allow location sharing when prompted.');
       }
 
       // Get user's current location
       const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(
-          resolve,
-          reject,
-          {
-            enableHighAccuracy: true,
-            timeout: 15000, // Increased timeout for better success rate
-            maximumAge: 60000 // Cache location for 1 minute
-          }
-        )
-      })
-
-      const { latitude, longitude } = position.coords
-      console.log(`Location captured: ${latitude}, ${longitude}`)
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 60000,
+        });
+      });
+      const { latitude, longitude } = position.coords;
+      console.log(`Location captured: ${latitude}, ${longitude}`);
 
       // Check geographic restrictions before navigating
       if (gameLocation && gameLocation !== 'Global') {
-        const isRestricted = checkGeographicRestriction(
-          { lat: latitude, lng: longitude },
-          gameLocation
-        )
-
+        const isRestricted = checkGeographicRestriction({ lat: latitude, lng: longitude }, gameLocation);
         if (isRestricted.isRestricted) {
-          showToast.error(`Geographic Restriction: ${isRestricted.reason}\n\n${isRestricted.suggestedAction}`)
-          setCapturingLocation(null)
-          return
+          showToast.error(`Geographic Restriction: ${isRestricted.reason}\n\n${isRestricted.suggestedAction}`);
+          setCapturingLocation(null);
+          return;
         }
       }
 
+      // --- AI Clue Generation Integration ---
+      // TODO: Replace these with actual values from game/progress context if available
+      const phase = 'PHASE_1';
+      const level = 1;
+      const stage = 1;
+      const context = undefined;
+      try {
+        const response = await fetch('/api/clues/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latitude, longitude, phase, level, stage, gameId, context }),
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          showToast.error(`Clue generation failed: ${errorData.error || 'Unknown error'}`);
+          setCapturingLocation(null);
+          return;
+        }
+        const data = await response.json();
+        if (!data.clues || !Array.isArray(data.clues)) {
+          showToast.error('No clues generated. Please try again.');
+          setCapturingLocation(null);
+          return;
+        }
+        showToast.success('Clues generated successfully!');
+      } catch (err) {
+        console.error('Clue generation error:', err);
+        showToast.error('Failed to generate clues. Please try again.');
+        setCapturingLocation(null);
+        return;
+      }
+      // --- End AI Clue Generation Integration ---
+
       // Navigate to game access page
-      const url = `/games/${gameId}/access`
-      showToast.success('Location captured successfully!')
-
-      setIsNavigating(true)
-      router.push(url)
-
+      const url = `/games/${gameId}/access`;
+      setIsNavigating(true);
+      router.push(url);
     } catch (error) {
-      console.error('Error capturing location:', error)
-
-      // Handle different geolocation errors
+      console.error('Error capturing location:', error);
       if (error instanceof GeolocationPositionError) {
         switch (error.code) {
           case error.PERMISSION_DENIED:
@@ -179,28 +194,28 @@ function Games() {
               '1. Click the location icon in your browser address bar\n' +
               '2. Select "Allow" for location access\n' +
               '3. Refresh the page and try again'
-            )
-            break
+            );
+            break;
           case error.POSITION_UNAVAILABLE:
-            showToast.error('Location information unavailable. Please try again or check your device settings.')
-            break
+            showToast.error('Location information unavailable. Please try again or check your device settings.');
+            break;
           case error.TIMEOUT:
-            showToast.error('Location request timed out. Please try again.')
-            break
+            showToast.error('Location request timed out. Please try again.');
+            break;
           default:
-            showToast.error('An unknown error occurred while getting location. Please try again.')
+            showToast.error('An unknown error occurred while getting location. Please try again.');
         }
       } else {
-        showToast.error('Unable to capture location. Please try again.')
+        showToast.error('Unable to capture location. Please try again.');
       }
     } finally {
-      setCapturingLocation(null)
+      setCapturingLocation(null);
     }
   }
 
   const fetchGames = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const headers: HeadersInit = {}
 
       if (token) {
@@ -224,7 +239,7 @@ function Games() {
 
   useEffect(() => {
     // Check authentication status and fetch games only once
-    const token = localStorage.getItem('token')
+    const token = sessionStorage.getItem('token')
     setIsAuthenticated(!!token)
 
     // Add caching to prevent duplicate API calls
@@ -261,7 +276,7 @@ function Games() {
   const registerForGame = useCallback(async (gameId: string) => {
     setRegistering(gameId)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch(`/api/games/${gameId}/participants`, {
         method: 'POST',
         headers: {
@@ -304,7 +319,7 @@ function Games() {
   }
 
   const getActionButton = (game: Game) => {
-    const token = localStorage.getItem('token')
+    const token = sessionStorage.getItem('token')
 
     if (!token) {
       return (

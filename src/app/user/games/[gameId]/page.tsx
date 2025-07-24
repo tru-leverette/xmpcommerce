@@ -45,7 +45,7 @@ export default function UserGameDetailPage() {
     useEffect(() => {
         const fetchGameDetail = async () => {
             try {
-                const token = localStorage.getItem("token");
+                const token = sessionStorage.getItem("token");
                 if (!token) {
                     setLoading(false);
                     return;
@@ -96,7 +96,7 @@ export default function UserGameDetailPage() {
         <ProtectedRouteGuard>
             <div className="min-h-screen bg-gradient-to-br from-yellow-100 via-green-100 to-blue-100 relative overflow-hidden">
                 {/* Decorative map/parchment background */}
-                <div className="absolute inset-0 pointer-events-none select-none opacity-30 z-0" style={{ backgroundImage: 'url(/parrot_logo.png), url(/public/globe.svg)', backgroundRepeat: 'no-repeat', backgroundPosition: 'top right, bottom left', backgroundSize: '200px, 300px' }}></div>
+                {/* <div className="absolute inset-0 pointer-events-none select-none opacity-30 z-0" style={{ backgroundImage: 'url(/parrot_logo.png), url(/public/globe.svg)', backgroundRepeat: 'no-repeat', backgroundPosition: 'top right, bottom left', backgroundSize: '200px, 300px' }}></div> */}
                 <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8 relative z-10">
                     {/* Breadcrumb */}
                     <nav aria-label="Breadcrumb" className="mb-4">

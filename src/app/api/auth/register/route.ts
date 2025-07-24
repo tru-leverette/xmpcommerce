@@ -13,7 +13,7 @@ const loadDependencies = async () => {
 
 export async function POST(request: NextRequest) {
   try {
-    const { prisma, hashPassword, generateToken } = await loadDependencies()
+    const { prisma, hashPassword } = await loadDependencies()
 
     console.log('=== REGISTRATION REQUEST START ===')
 
@@ -85,20 +85,10 @@ export async function POST(request: NextRequest) {
       // Continue with registration even if activity logging fails
     }
 
-    // Generate JWT token
-    console.log('Generating JWT token...')
-    const token = generateToken({
-      userId: user.id,
-      email: user.email,
-      username: user.username,
-      role: user.role
-    })
-    console.log('JWT token generated successfully')
-
+    // Do not generate or return a JWT token; just return a success message and user info
     console.log('Sending success response...')
     return NextResponse.json({
-      message: 'User registered successfully',
-      token,
+      message: 'User registered successfully. Please log in to continue.',
       user: {
         id: user.id,
         email,

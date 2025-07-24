@@ -270,13 +270,11 @@ export async function GET(
       }
     });
     if (!participant) {
-      const err = ERROR_CONFIG.PARTICIPANT_NOT_FOUND;
+      // Instead of a hard error, return a 'preparing' status so the frontend can retry
       return NextResponse.json({
-        error: err.message,
-        errorCode: 'PARTICIPANT_NOT_FOUND',
-        gameId,
-        userId: decoded.userId
-      }, { status: err.status });
+        preparing: true,
+        message: 'Preparing your hunt, please wait...'
+      }, { status: 202 });
     }
 
     // Update participant location and assign to clue set if provided
@@ -297,32 +295,25 @@ export async function GET(
     // Get current progress
     const currentProgress = participant.progress[0];
     if (!currentProgress) {
-      const err = ERROR_CONFIG.PROGRESS_NOT_FOUND;
-      return NextResponse.json({
-        error: err.message,
-        errorCode: 'PROGRESS_NOT_FOUND',
-        gameId,
-        userId: decoded.userId
-      }, { status: err.status });
+      return NextResponse.json({ preparing: true, message: 'Preparing your hunt, please wait...' }, { status: 202 });
     }
 
-    // Get current stage and hunts
+    // If game is complete, block further clue access
+    if (currentProgress.completedAt) {
+      return NextResponse.json({ error: 'Game already completed', isGameComplete: true }, { status: 403 });
+    }
+
+    // ...existing code for getting hunts and clues...
     const currentStage = currentProgress.stage;
     let hunts = currentStage.hunts;
-
-    // If participant has a clue set assigned, filter hunts by clue set
     if (participant.clueSetId) {
-      hunts = hunts.filter((hunt: { clueSetId: string | null }) =>
-        typeof hunt.clueSetId === 'string' && hunt.clueSetId === participant.clueSetId
-      );
+      hunts = hunts.filter((hunt: { clueSetId: string | null }) => typeof hunt.clueSetId === 'string' && hunt.clueSetId === participant.clueSetId);
     }
-
-    // If no hunts exist for this clue set, auto-generate clues using OpenAI and return them
     if (hunts.length === 0 && participant.clueSetId && currentStage?.id) {
       try {
         const generatedHunts = await getCluesForClueSet(participant.clueSetId, currentStage.id);
         if (generatedHunts.length > 0) {
-          // Define explicit types for generated hunts and clues
+          // ...existing code for mapping generated hunts...
           interface GeneratedClue {
             id: string;
             clueNumber: number;
@@ -382,7 +373,6 @@ export async function GET(
           throw new Error('Failed to generate clues');
         }
       } catch (err) {
-        // Robust error handling
         return NextResponse.json({
           error: 'NO_CLUES_AVAILABLE',
           message: 'No clues are available for your current location and clue generation failed.',
@@ -396,8 +386,6 @@ export async function GET(
         }, { status: 200 });
       }
     }
-
-    // Find the hunt that contains the requested clue
     let targetHunt: typeof hunts[0] | null = null;
     let targetClue: { id: string; clueNumber: number; question: string; hint?: string | null; type: string; huntId: string } | null = null;
     let totalClues = 0;
@@ -522,17 +510,6 @@ export async function POST(
         aiAnalysis
       }
     });
-    const pebblesEarned = isCorrect ? 10 : 0;
-    if (pebblesEarned > 0) {
-      await prisma.participant.update({
-        where: { id: participant.id },
-        data: {
-          pebbles: {
-            increment: pebblesEarned
-          }
-        }
-      });
-    }
     let isGameComplete = false;
     let nextClueNumber: number | null = null;
     if (isCorrect) {
@@ -550,14 +527,45 @@ export async function POST(
         nextClueNumber = allClues[currentIndex + 1].clueNumber;
       } else {
         isGameComplete = true;
+        // Mark progress as complete
+        await prisma.participantProgress.updateMany({
+          where: { participantId: participant.id, stageId: clue.hunt.stage.id },
+          data: { completedAt: new Date() }
+        });
+        // Fetch stage for badge info
+        const stage = await prisma.stage.findUnique({
+          where: { id: clue.hunt.stage.id },
+          select: { badgeName: true, badgeDescription: true, badgeImage: true, levelId: true, stageNumber: true }
+        });
+        // Fetch level number
+        let levelNumber = 1;
+        if (stage?.levelId) {
+          const level = await prisma.level.findUnique({ where: { id: stage.levelId }, select: { levelNumber: true } });
+          if (level?.levelNumber) levelNumber = level.levelNumber;
+        }
+        // Fetch progressId for this stage
+        const progress = await prisma.participantProgress.findFirst({
+          where: { participantId: participant.id, stageId: clue.hunt.stage.id },
+          select: { id: true }
+        });
+        await prisma.badge.create({
+          data: {
+            name: stage?.badgeName || 'Stage Complete',
+            description: stage?.badgeDescription || 'Completed all clues in this stage',
+            imageUrl: stage?.badgeImage || null,
+            badgeType: 'STAGE',
+            levelNumber,
+            stageNumber: stage?.stageNumber || 1,
+            progressId: progress?.id || ''
+          }
+        });
       }
     }
     return NextResponse.json({
       submission: {
         id: submission.id,
         isCorrect,
-        aiAnalysis,
-        pebblesEarned
+        aiAnalysis
       },
       isGameComplete,
       nextClueNumber

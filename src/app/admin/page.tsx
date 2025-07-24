@@ -99,7 +99,7 @@ export default function AdminDashboard() {
 
   const verifyAdminAccess = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       if (!token) {
         console.warn('No token found - redirecting to login')
         window.location.href = '/auth/login?redirect=/admin'
@@ -127,7 +127,7 @@ export default function AdminDashboard() {
 
       if (!response.ok) {
         console.warn('Token invalid or insufficient permissions - redirecting to login')
-        localStorage.clear() // Clear invalid token
+        sessionStorage.clear() // Clear invalid token
         window.location.href = '/auth/login?redirect=/admin&reason=invalid_token'
         return
       }
@@ -142,7 +142,7 @@ export default function AdminDashboard() {
       await fetchActivities()
     } catch (error) {
       console.error('Admin access verification failed:', error)
-      localStorage.clear()
+      sessionStorage.clear()
       window.location.href = '/auth/login?redirect=/admin&reason=verification_failed'
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -155,7 +155,7 @@ export default function AdminDashboard() {
 
   const fetchCurrentUser = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       if (token) {
         // Server-side verification happens in verifyAdminAccess
         // This is just for UI display purposes
@@ -170,7 +170,7 @@ export default function AdminDashboard() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch('/api/admin/users', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -188,7 +188,7 @@ export default function AdminDashboard() {
 
   const fetchGames = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch('/api/games', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -218,7 +218,7 @@ export default function AdminDashboard() {
   const fetchActivities = useCallback(async (page: number = 1) => {
     try {
       setLoadingActivities(true)
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch(`/api/activities?page=${page}&limit=20`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -360,7 +360,7 @@ export default function AdminDashboard() {
 
     setCreatingGame(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch('/api/games', {
         method: 'POST',
         headers: {
@@ -439,7 +439,7 @@ export default function AdminDashboard() {
 
     setUpdatingGame(gameId)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch(`/api/games/${gameId}`, {
         method: 'PATCH',
         headers: {
@@ -504,7 +504,7 @@ export default function AdminDashboard() {
 
     setDeletingGame(gameToDelete)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch(`/api/games/${gameToDelete}`, {
         method: 'DELETE',
         headers: {
@@ -549,7 +549,7 @@ export default function AdminDashboard() {
   const updateUser = async (userId: string, action: string, role?: string) => {
     setUpdating(userId)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const response = await fetch(`/api/admin/users/${userId}`, {
         method: 'PATCH',
         headers: {

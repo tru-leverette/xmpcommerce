@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import AuthRouteGuard from '@/components/AuthRouteGuard'
+import { useAuth } from '@/lib/AuthContext'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import AuthRouteGuard from '@/components/AuthRouteGuard'
+import { useState } from 'react'
 
 export default function Login() {
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: ''
@@ -31,16 +33,11 @@ export default function Login() {
       const data = await response.json()
 
       if (response.ok) {
-        // Store both tokens
-        localStorage.setItem('token', data.accessToken)
-        localStorage.setItem('refreshToken', data.refreshToken)
-        
-        // Dispatch custom event to notify Navigation component
-        window.dispatchEvent(new Event('authChange'))
-        
-        router.push('/dashboard')
+        // Use AuthContext login to update state everywhere
+        login(data.accessToken, data.refreshToken);
+        router.push('/dashboard');
       } else {
-        setError(data.error || 'Login failed')
+        setError(data.error || 'Login failed');
       }
     } catch {
       setError('Network error. Please try again.')
@@ -71,14 +68,14 @@ export default function Login() {
               </Link>
             </p>
           </div>
-          
+
           <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
                 {error}
               </div>
             )}
-            
+
             <div className="space-y-4">
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -95,7 +92,7 @@ export default function Login() {
                   onChange={handleChange}
                 />
               </div>
-              
+
               <div>
                 <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                   Password

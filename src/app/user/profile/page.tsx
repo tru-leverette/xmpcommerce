@@ -114,7 +114,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token')
+        const token = sessionStorage.getItem('token')
         if (!token) {
           router.push('/auth/login')
           return
@@ -222,7 +222,7 @@ export default function ProfilePage() {
 
     setSaving(true)
     try {
-      const token = localStorage.getItem('token')
+      const token = sessionStorage.getItem('token')
       const updateData: {
         email: string;
         avatar: string;
@@ -253,7 +253,7 @@ export default function ProfilePage() {
         setUser(data.user);
         // Save new token if provided
         if (data.accessToken) {
-          localStorage.setItem('token', data.accessToken);
+          sessionStorage.setItem('token', data.accessToken);
         }
         setEditing(false);
         setFormData(prev => ({
@@ -413,7 +413,7 @@ export default function ProfilePage() {
                 setUser((prev) => prev ? { ...prev, avatar } : prev);
                 setAvatarModalOpen(false);
                 try {
-                  const token = localStorage.getItem('token');
+                  const token = sessionStorage.getItem('token');
                   if (!token) {
                     showToast.error('Not authenticated.');
                     return;
@@ -434,7 +434,7 @@ export default function ProfilePage() {
                     setUser(data.user);
                     setFormData((prev) => ({ ...prev, avatar: data.user.avatar }));
                     if (data.accessToken) {
-                      localStorage.setItem('token', data.accessToken);
+                      sessionStorage.setItem('token', data.accessToken);
                     }
                     showToast.success('Avatar updated successfully!');
                   } else {

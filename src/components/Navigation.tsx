@@ -5,14 +5,14 @@ import { useAuth } from '@/lib/AuthContext'
 import { useTabSecurity } from '@/lib/hooks/useTabSecurity'
 import Image from 'next/image'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useEffect, useRef, useState } from 'react'
 
 export default function Navigation() {
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [mounted, setMounted] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
-  const router = useRouter();
+  // const router = useRouter();
   const pathname = usePathname();
   const dropdownRef = useRef<HTMLDivElement>(null);
   useTabSecurity();
@@ -33,8 +33,7 @@ export default function Navigation() {
   // No need to check auth state on route change, handled by context
 
   const handleLogout = async () => {
-    const token = localStorage.getItem('token')
-
+    const token = sessionStorage.getItem('token');
     // Call logout API to record activity before clearing token
     if (token) {
       try {
@@ -44,21 +43,14 @@ export default function Navigation() {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
-        })
+        });
       } catch (error) {
-        console.error('Failed to log logout activity:', error)
+        console.error('Failed to log logout activity:', error);
         // Continue with logout even if API call fails
       }
     }
-
-    localStorage.removeItem('token')
-    // No longer needed, handled by context
-    setShowDropdown(false)
-
-    // Dispatch custom event to notify other components
-    window.dispatchEvent(new Event('authChange'))
-
-    router.push('/')
+    setShowDropdown(false);
+    logout(); // This will update context and redirect
   }
 
   const toggleDropdown = () => {

@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refreshAccessToken = useCallback(async (): Promise<boolean> => {
     try {
-      const refreshToken = localStorage.getItem('refreshToken')
+      const refreshToken = sessionStorage.getItem('refreshToken')
 
       if (!refreshToken) {
         console.warn('No refresh token found')
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json()
 
       // Store the new access token
-      localStorage.setItem('token', data.accessToken)
+      sessionStorage.setItem('token', data.accessToken)
       authCache.isValid = false // Reset cache for new token
 
       console.log('Access token refreshed successfully')
@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyAuth = useCallback(async (requiredRole: string[] = []): Promise<boolean> => {
     try {
-      let token = localStorage.getItem('token')
+      let token = sessionStorage.getItem('token')
 
       if (!token) {
         console.warn('No token found')
@@ -141,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (refreshSuccess) {
           // Retry with the new token
-          const newToken = localStorage.getItem('token')!
+          const newToken = sessionStorage.getItem('token')!
           response = await fetch(testEndpoint, {
             headers: {
               'Authorization': `Bearer ${newToken}`
@@ -154,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) {
         console.warn('Server-side auth failed')
-        localStorage.clear()
+        sessionStorage.clear()
         authCache.isValid = false
         setIsAuthenticated(false)
         setUser(null)
@@ -174,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     } catch (error) {
       console.error('Auth verification error:', error)
-      localStorage.clear()
+      sessionStorage.clear()
       authCache.isValid = false
       setIsAuthenticated(false)
       setUser(null)
@@ -184,14 +184,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshAccessToken])
 
   const login = useCallback((accessToken: string, refreshToken: string) => {
-    localStorage.setItem('token', accessToken)
-    localStorage.setItem('refreshToken', refreshToken)
+    sessionStorage.setItem('token', accessToken)
+    sessionStorage.setItem('refreshToken', refreshToken)
     authCache.isValid = false // Reset cache on new login
     verifyAuth()
   }, [verifyAuth])
 
   const logout = useCallback(() => {
-    localStorage.clear()
+    sessionStorage.clear()
     authCache.isValid = false
     setIsAuthenticated(false)
     setUser(null)

@@ -3,6 +3,7 @@
 import ProtectedRouteGuard from '@/components/ProtectedRouteGuard'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
 interface UserData {
@@ -48,37 +49,63 @@ export default function UserDashboard() {
   const [loading, setLoading] = useState(true)
   const [totalScavengerStones, setTotalScavengerStones] = useState(0)
 
+  const router = useRouter();
   useEffect(() => {
+    // Helper: Clear all dashboard_data_* and admin_verification_* session storage keys
+    const clearStaleSessionStorage = () => {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && (key.startsWith('dashboard_data_') || key.startsWith('admin_verification_'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach((key) => sessionStorage.removeItem(key));
+    };
+
     // Skip if already fetching or already loaded
     if (!loading || (participations.length > 0 && badges.length > 0)) {
-      return
+      return;
     }
 
     // Check session storage for cached data to prevent duplicate calls
-    const cacheKey = 'dashboard_data_' + Date.now().toString().slice(0, -5) // 5-minute cache
-    const cachedData = sessionStorage.getItem(cacheKey)
+    const cacheKey = 'dashboard_data_' + Date.now().toString().slice(0, -5); // 5-minute cache
+    const cachedData = sessionStorage.getItem(cacheKey);
 
     if (cachedData) {
       try {
-        const { user, participations, badges, totalScavengerStones } = JSON.parse(cachedData)
-        setUser(user)
-        setParticipations(participations)
-        setBadges(badges)
-        setTotalScavengerStones(totalScavengerStones)
-        setLoading(false)
-        return
+        const { user, participations, badges, totalScavengerStones } = JSON.parse(cachedData);
+        // If user or participations are missing, clear all dashboard/admin session storage
+        if (!user || !participations) {
+          clearStaleSessionStorage();
+        } else {
+          setUser(user);
+          setParticipations(participations);
+          setBadges(badges);
+          setTotalScavengerStones(totalScavengerStones);
+          setLoading(false);
+          return;
+        }
       } catch {
         // Clear bad cache and continue
-        sessionStorage.removeItem(cacheKey)
+        sessionStorage.removeItem(cacheKey);
+        clearStaleSessionStorage();
       }
     }
 
     const fetchDashboardData = async () => {
       try {
-        const token = localStorage.getItem('token')
+        const token = sessionStorage.getItem('token')
         if (!token) {
-          setLoading(false)
-          return
+          clearStaleSessionStorage();
+          sessionStorage.clear();
+          setUser(null);
+          setParticipations([]);
+          setBadges([]);
+          setTotalScavengerStones(0);
+          setLoading(false);
+          router.push('/auth/login?redirect=/dashboard&reason=missing_token');
+          return;
         }
 
         // Get user data from token instead of API call (optimization)
@@ -91,10 +118,6 @@ export default function UserDashboard() {
             username: typeof payload.username === 'string' ? payload.username : '',
             role: payload.role
           }
-          console.log('User data from token:', userData)
-          console.log('User data from token:', userData)
-          console.log('User data from token:', userData)
-          console.log('User data from token:', userData)
           setUser(userData)
         } catch {
           console.warn('Could not parse user from token, falling back to API')
@@ -172,7 +195,7 @@ export default function UserDashboard() {
     }
 
     fetchDashboardData()
-  }, [loading, participations.length, badges.length])
+  }, [loading, participations.length, badges.length, router])
 
   if (loading) {
     return (

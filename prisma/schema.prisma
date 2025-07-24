@@ -256,12 +256,16 @@ model ClueSet {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   gameId          String
+  phase           Phase         @default(PHASE_1)
+  levelNumber     Int           @default(1)
+  stageNumber     Int           @default(1)
   game            Game          @relation(fields: [gameId], references: [id], onDelete: Cascade)
   hunts           Hunt[] // Hunts that belong to this clue set
   participants    Participant[] // Participants assigned to this clue set
 
   @@index([gameId])
   @@index([centerLatitude, centerLongitude])
+  @@index([gameId, phase, levelNumber, stageNumber])
   @@index([minLatitude, maxLatitude, minLongitude, maxLongitude])
   @@map("clue_sets")
 }

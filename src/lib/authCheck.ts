@@ -5,7 +5,7 @@
 
 export const verifyClientAuth = async (): Promise<boolean> => {
   try {
-    const token = localStorage.getItem('token')
+    const token = sessionStorage.getItem('token')
     if (!token) {
       return false
     }
@@ -19,19 +19,19 @@ export const verifyClientAuth = async (): Promise<boolean> => {
 
     if (!response.ok) {
       // Token is invalid or user doesn't exist - clear it
-      localStorage.removeItem('token')
+      sessionStorage.removeItem('token')
       return false
     }
 
     return true
   } catch (error) {
     console.error('Auth verification failed:', error)
-    localStorage.removeItem('token')
+    sessionStorage.removeItem('token')
     return false
   }
 }
 
 export const logoutUser = () => {
-  localStorage.removeItem('token')
+  sessionStorage.removeItem('token')
   window.location.href = '/auth/login'
 }
