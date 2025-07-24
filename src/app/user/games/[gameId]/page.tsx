@@ -166,22 +166,41 @@ export default function UserGameDetailPage() {
                             <p className="text-gray-500">No badges earned in this game yet. Seek out hidden treasures!</p>
                         ) : (
                             <div className="flex flex-wrap gap-6">
-                                {game.badges.map((badge) => (
-                                    <div key={badge.id} className="flex items-center space-x-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg shadow p-3">
-                                        <div className="w-12 h-12 bg-yellow-200 rounded-full flex items-center justify-center border-2 border-yellow-400">
-                                            {badge.imageUrl ? (
-                                                <Image src={badge.imageUrl} alt={badge.name} width={40} height={40} className="w-10 h-10" />
-                                            ) : (
-                                                <span className="text-yellow-600 text-2xl">🏆</span>
-                                            )}
+                                {game.badges.map((badge: {
+                                    id: string;
+                                    name: string;
+                                    description: string;
+                                    imageUrl: string;
+                                    badgeType?: 'STAGE' | 'LEVEL';
+                                    levelNumber?: number;
+                                    stageNumber?: number | null;
+                                    earnedAt: string;
+                                }) => {
+                                    let badgeImg = badge.imageUrl;
+                                    if (!badgeImg || badgeImg === '') {
+                                        if (badge.badgeType === 'LEVEL' && badge.levelNumber) {
+                                            badgeImg = `/assets/badges/level${badge.levelNumber}_platinum.png`;
+                                        } else if (badge.badgeType === 'STAGE' && badge.levelNumber) {
+                                            badgeImg = `/assets/badges/level${badge.levelNumber}_stage${badge.stageNumber ?? 1}.png`;
+                                        }
+                                    }
+                                    return (
+                                        <div key={badge.id} className="flex items-center space-x-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg shadow p-3">
+                                            <div className="w-12 h-12 bg-yellow-200 rounded-full flex items-center justify-center border-2 border-yellow-400">
+                                                {badgeImg ? (
+                                                    <Image src={badgeImg} alt={badge.name} width={40} height={40} className="w-10 h-10" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                                ) : (
+                                                    <span className="text-yellow-600 text-2xl">🏆</span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-brown-900">{badge.name}</div>
+                                                <div className="text-sm text-brown-700">{badge.description}</div>
+                                                <div className="text-xs text-gray-500">Earned {new Date(badge.earnedAt).toLocaleDateString()}</div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div className="font-bold text-brown-900">{badge.name}</div>
-                                            <div className="text-sm text-brown-700">{badge.description}</div>
-                                            <div className="text-xs text-gray-500">Earned {new Date(badge.earnedAt).toLocaleDateString()}</div>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

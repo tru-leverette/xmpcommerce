@@ -86,6 +86,9 @@ export async function GET(req: NextRequest, { params }: { params: { gameId: stri
                     name: badge.name,
                     description: badge.description ?? '',
                     imageUrl: badge.imageUrl ?? '',
+                    badgeType: badge.badgeType,
+                    levelNumber: badge.levelNumber,
+                    stageNumber: badge.stageNumber ?? null,
                     earnedAt: badge.earnedAt.toISOString()
                 }))
             );

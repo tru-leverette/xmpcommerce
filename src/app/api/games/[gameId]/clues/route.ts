@@ -552,13 +552,45 @@ export async function POST(
           data: {
             name: stage?.badgeName || 'Stage Complete',
             description: stage?.badgeDescription || 'Completed all clues in this stage',
-            imageUrl: stage?.badgeImage || null,
+            imageUrl: stage?.badgeImage || `/assets/badges/level${levelNumber}_stage${stage?.stageNumber || 1}.png`,
             badgeType: 'STAGE',
             levelNumber,
             stageNumber: stage?.stageNumber || 1,
             progressId: progress?.id || ''
           }
         });
+        // After all stage badges in a level are earned, create a platinum level badge if not already present
+        const totalStages = await prisma.stage.count({ where: { levelId: stage?.levelId } });
+        const earnedStageBadges = await prisma.badge.count({
+          where: {
+            badgeType: 'STAGE',
+            levelNumber,
+            progress: { participantId: participant.id },
+          },
+        });
+        if (earnedStageBadges === totalStages && totalStages > 0) {
+          // Check if platinum badge already exists
+          const platinumExists = await prisma.badge.findFirst({
+            where: {
+              badgeType: 'LEVEL',
+              levelNumber,
+              progress: { participantId: participant.id },
+            },
+          });
+          if (!platinumExists) {
+            await prisma.badge.create({
+              data: {
+                name: `Level ${levelNumber} Platinum`,
+                description: `Earned by completing all stages in Level ${levelNumber}`,
+                imageUrl: `/assets/badges/level${levelNumber}_platinum.png`,
+                badgeType: 'LEVEL',
+                levelNumber,
+                stageNumber: null,
+                progressId: progress?.id || ''
+              }
+            });
+          }
+        }
       }
     }
     return NextResponse.json({

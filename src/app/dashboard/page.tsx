@@ -35,11 +35,14 @@ interface GameParticipation {
 }
 
 interface Badge {
-  id: string
-  name: string
-  description: string
-  imageUrl: string
-  earnedAt: string
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  badgeType: 'STAGE' | 'LEVEL';
+  levelNumber: number;
+  stageNumber?: number | null;
+  earnedAt: string;
 }
 
 export default function UserDashboard() {
@@ -371,24 +374,34 @@ export default function UserDashboard() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {badges.slice(0, 4).map((badge) => (
-                      <div key={badge.id} className="flex items-center space-x-4">
-                        <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
-                          {badge.imageUrl ? (
-                            <Image src={badge.imageUrl} alt={badge.name} width={32} height={32} className="w-8 h-8" />
-                          ) : (
-                            <span className="text-yellow-600 text-xl">🏆</span>
-                          )}
+                    {badges.slice(0, 4).map((badge) => {
+                      let badgeImg = badge.imageUrl;
+                      if (!badgeImg || badgeImg === '') {
+                        if (badge.badgeType === 'LEVEL') {
+                          badgeImg = `/assets/badges/level${badge.levelNumber}_platinum.png`;
+                        } else if (badge.badgeType === 'STAGE') {
+                          badgeImg = `/assets/badges/level${badge.levelNumber}_stage${badge.stageNumber ?? 1}.png`;
+                        }
+                      }
+                      return (
+                        <div key={badge.id} className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center">
+                            {badgeImg ? (
+                              <Image src={badgeImg} alt={badge.name} width={32} height={32} className="w-8 h-8" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                            ) : (
+                              <span className="text-yellow-600 text-xl">🏆</span>
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <h3 className="font-medium text-gray-900">{badge.name}</h3>
+                            <p className="text-sm text-gray-500">{badge.description}</p>
+                            <p className="text-xs text-gray-400">
+                              Earned {new Date(badge.earnedAt).toLocaleDateString()}
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900">{badge.name}</h3>
-                          <p className="text-sm text-gray-500">{badge.description}</p>
-                          <p className="text-xs text-gray-400">
-                            Earned {new Date(badge.earnedAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
