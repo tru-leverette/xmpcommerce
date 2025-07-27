@@ -1,0 +1,11 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Type check and lint",
+			"command": "yarn lint && yarn tsc --noEmit",
+			"group": "test"
+		}
+	]
+}

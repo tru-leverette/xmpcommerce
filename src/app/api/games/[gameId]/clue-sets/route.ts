@@ -6,6 +6,7 @@ import {
     type Location
 } from '@/lib/clueSetManager';
 import { prisma } from '@/lib/prisma';
+import { Phase } from '@prisma/client';
 import { NextRequest, NextResponse } from 'next/server';
 
 // Test endpoint to demonstrate clue set assignment
@@ -47,49 +48,104 @@ export async function POST(
         }
 
         if (action === 'test-assignment') {
-            let clueSet = await findExistingClueSet(gameId, location);
+            // Get participant progression and associated clueSet
+            const participant = await prisma.participant.findFirst({
+                where: { gameId, userId: decoded.userId },
+                include: { progress: true, clueSet: true }
+            });
+            if (!participant || !participant.progress || participant.progress.length === 0) {
+                return NextResponse.json({ error: 'Participant or progress not found' }, { status: 404 });
+            }
+            const progress = participant.progress[0];
+            const { phase, currentLevel, currentStage } = progress;
+            let clueSet = participant.clueSet;
             let created = false;
-            let stageId: string = '';
-            let level = await prisma.level.findFirst({ where: { gameId } });
+            // If no clueSet association, use location to find or create one (Phase 1 only)
+            if (!clueSet) {
+                const foundClueSet = await findExistingClueSet(gameId, location);
+                clueSet = foundClueSet
+                    ? {
+                        ...foundClueSet,
+                        levelNumber: foundClueSet.levelNumber ?? currentLevel,
+                        phase: foundClueSet.phase as Phase
+                    }
+                    : null;
+                if (!clueSet) {
+                    const locationName = `ClueSet-${Math.round(location.lat * 1000)}-${Math.round(location.lng * 1000)}`;
+                    clueSet = await createClueSet({
+                        gameId,
+                        location,
+                        name: locationName,
+                        description: `Auto-generated clue set for location ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`,
+                        phase,
+                        level: currentLevel,
+                        stage: currentStage,
+                        cluesCount: 4,
+                        stageId: '' // will be set below
+                    });
+                    created = true;
+                }
+                // Associate clueSet to participant
+                await prisma.participant.update({
+                    where: { id: participant.id },
+                    data: { clueSet: { connect: { id: clueSet.id } } }
+                });
+            }
+            // Find or create level
+            let level = await prisma.level.findFirst({ where: { gameId, levelNumber: currentLevel } });
             if (!level) {
                 level = await prisma.level.create({
                     data: {
                         gameId,
-                        levelNumber: 1,
-                        name: 'Level 1',
-                        description: 'Auto-created Level 1',
+                        levelNumber: currentLevel,
+                        name: `Level ${currentLevel}`,
+                        description: `Auto-created Level ${currentLevel}`,
                     },
                 });
             }
-            let stage = await prisma.stage.findFirst({ where: { levelId: level.id } });
+            // Find or create stage
+            let stage = await prisma.stage.findFirst({ where: { levelId: level.id, stageNumber: currentStage } });
             if (!stage) {
                 stage = await prisma.stage.create({
                     data: {
                         levelId: level.id,
-                        stageNumber: 1,
-                        name: 'Stage 1',
-                        description: 'Auto-created Stage 1',
+                        stageNumber: currentStage,
+                        name: `Stage ${currentStage}`,
+                        description: `Auto-created Stage ${currentStage}`,
                     },
                 });
             }
-            stageId = stage.id;
-            if (!clueSet) {
-                const locationName = `ClueSet-${Math.round(location.lat * 1000)}-${Math.round(location.lng * 1000)}`;
-                clueSet = await createClueSet({
-                    gameId,
-                    location,
-                    name: locationName,
-                    description: `Auto-generated clue set for location ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`,
-                    phase: 'PHASE_1',
-                    level: 1,
-                    stage: 1,
-                    cluesCount: 4,
-                    stageId
+            const stageId: string = stage.id;
+            // Find or create hunt for this clueSet and stage
+            let hunt = await prisma.hunt.findFirst({ where: { clueSetId: clueSet.id, stageId } });
+            if (!hunt) {
+                hunt = await prisma.hunt.create({
+                    data: {
+                        stageId,
+                        clueSetId: clueSet.id,
+                        huntNumber: 1,
+                        name: `Hunt for ClueSet ${clueSet.name} Stage ${currentStage}`,
+                        description: `Auto-generated hunt for ClueSet ${clueSet.name} Stage ${currentStage}`,
+                    }
                 });
-                created = true;
             }
-            if (!clueSet) {
-                return NextResponse.json({ error: 'Failed to create or find clue set' }, { status: 500 });
+            // Check if clues exist for this hunt
+            const cluesForStage = await prisma.clue.findMany({ where: { huntId: hunt.id } });
+            if (cluesForStage.length === 0) {
+                // Generate clues for this hunt
+                for (let i = 1; i <= 4; i++) {
+                    await prisma.clue.create({
+                        data: {
+                            huntId: hunt.id,
+                            clueNumber: i,
+                            question: `Auto-generated clue ${i} for Stage ${currentStage}`,
+                            type: 'TEXT_ANSWER',
+                            isActive: true,
+                            aiGenerated: true,
+                            answer: 'test',
+                        }
+                    });
+                }
             }
             const distance = calculateDistance(
                 location,

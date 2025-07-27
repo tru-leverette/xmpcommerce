@@ -417,3 +417,55 @@ export async function DELETE(
     )
   }
 }
+
+// DEBUG: GET game details with extra diagnostics
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { gameId: string } }
+) {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const { verifyToken, getTokenFromHeader } = await import('@/lib/auth');
+    const { gameId } = params;
+    const authHeader = request.headers.get('authorization');
+    const token = getTokenFromHeader(authHeader);
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required', debug: { gameId, tokenPresent: false } }, { status: 401 });
+    }
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return NextResponse.json({ error: 'Invalid or expired authentication token', debug: { gameId, tokenPresent: true } }, { status: 401 });
+    }
+    // Find the game and include all relevant relations
+    const game = await prisma.game.findUnique({
+      where: { id: gameId },
+      include: {
+        creator: true,
+        levels: { include: { stages: true } },
+        participants: true,
+      },
+    });
+    if (!game) {
+      return NextResponse.json({ error: 'Game not found', debug: { gameId, found: false } }, { status: 404 });
+    }
+    // Check for required relations
+    const hasLevels = Array.isArray(game.levels) && game.levels.length > 0;
+    const hasStages = hasLevels && game.levels.some(l => Array.isArray(l.stages) && l.stages.length > 0);
+    const hasCreator = !!game.creator;
+    // Return all debug info
+    return NextResponse.json({
+      game,
+      debug: {
+        gameId,
+        found: true,
+        status: game.status,
+        hasLevels,
+        hasStages,
+        hasCreator,
+        participants: game.participants.length,
+      },
+    });
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal server error', debug: { message: (error as Error).message } }, { status: 500 });
+  }
+}

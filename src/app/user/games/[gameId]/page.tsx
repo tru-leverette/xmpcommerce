@@ -92,13 +92,22 @@ export default function UserGameDetailPage() {
         );
     }
 
+    // Find the latest progress (by highest level, then stage, then hunt, then clue)
+    let latestProgress: typeof game.progress[0] | null = null;
+    if (game.progress.length > 0) {
+        latestProgress = game.progress.reduce((latest, curr) => {
+            if (!latest) return curr;
+            if (curr.currentLevel > latest.currentLevel) return curr;
+            if (curr.currentLevel === latest.currentLevel && curr.currentStage > latest.currentStage) return curr;
+            if (curr.currentLevel === latest.currentLevel && curr.currentStage === latest.currentStage && curr.currentHunt > latest.currentHunt) return curr;
+            if (curr.currentLevel === latest.currentLevel && curr.currentStage === latest.currentStage && curr.currentHunt === latest.currentHunt && curr.currentClue > latest.currentClue) return curr;
+            return latest;
+        }, game.progress[0]);
+    }
     return (
         <ProtectedRouteGuard>
             <div className="min-h-screen bg-gradient-to-br from-yellow-100 via-green-100 to-blue-100 relative overflow-hidden">
-                {/* Decorative map/parchment background */}
-                {/* <div className="absolute inset-0 pointer-events-none select-none opacity-30 z-0" style={{ backgroundImage: 'url(/parrot_logo.png), url(/public/globe.svg)', backgroundRepeat: 'no-repeat', backgroundPosition: 'top right, bottom left', backgroundSize: '200px, 300px' }}></div> */}
                 <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8 relative z-10">
-                    {/* Breadcrumb */}
                     <nav aria-label="Breadcrumb" className="mb-4">
                         <ol className="flex items-center space-x-2 text-sm text-brown-700">
                             <li>
@@ -144,11 +153,19 @@ export default function UserGameDetailPage() {
                         </div>
                     )}
                     <div className="mb-8">
-                        <h2 className="text-2xl font-bold text-brown-900 mb-2 flex items-center gap-2">🧩 Progress Map</h2>
-                        {game.progress.length === 0 ? (
-                            <p className="text-gray-500">No progress yet. Your adventure awaits!</p>
-                        ) : (
+                        <h2 className="text-2xl font-bold text-brown-900 mb-2 flex items-center gap-2">🧩 Current Progress</h2>
+                        {latestProgress ? (
                             <div className="bg-white/80 rounded-lg shadow p-4 border-2 border-green-200">
+                                <span className="text-lg">🧭</span>
+                                <span>Level <b>{latestProgress.currentLevel}</b>, Stage <b>{latestProgress.currentStage}</b>, Hunt <b>{latestProgress.currentHunt}</b>, Clue <b>{latestProgress.currentClue}</b> {latestProgress.isCompleted && <span className="text-green-600 font-bold">(Completed)</span>}</span>
+                            </div>
+                        ) : (
+                            <p className="text-gray-500">No progress yet. Your adventure awaits!</p>
+                        )}
+                        {/* Optionally, show history below */}
+                        {game.progress.length > 1 && (
+                            <div className="mt-4">
+                                <h3 className="text-lg font-bold text-brown-800 mb-2">Progress History</h3>
                                 <ul className="list-none pl-0 text-brown-800 space-y-2">
                                     {game.progress.map((prog, idx) => (
                                         <li key={idx} className="flex items-center gap-2">

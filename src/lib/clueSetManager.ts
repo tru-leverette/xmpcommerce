@@ -11,6 +11,17 @@ export async function findClosestOverlappingClueSet(
     centerLatitude: number;
     centerLongitude: number;
     radiusKm: number;
+    createdAt: Date;
+    updatedAt: Date;
+    minLatitude: number;
+    maxLatitude: number;
+    minLongitude: number;
+    maxLongitude: number;
+    phase: string;
+    isActive: boolean;
+    gameId: string;
+    stageNumber: number;
+    levelNumber: number;
 } | null> {
     const clueSets = await prisma.clueSet.findMany({
         where: { gameId, isActive: true },
@@ -20,7 +31,18 @@ export async function findClosestOverlappingClueSet(
             description: true,
             centerLatitude: true,
             centerLongitude: true,
-            radiusKm: true
+            radiusKm: true,
+            createdAt: true,
+            updatedAt: true,
+            minLatitude: true,
+            maxLatitude: true,
+            minLongitude: true,
+            maxLongitude: true,
+            phase: true,
+            isActive: true,
+            gameId: true,
+            stageNumber: true,
+            levelNumber: true
         }
     });
     // Filter to only those that overlap the location
@@ -36,7 +58,13 @@ export async function findClosestOverlappingClueSet(
             closest = cs;
         }
     }
-    return closest;
+    if (closest) {
+        return {
+            ...closest,
+            levelNumber: closest.levelNumber ?? 1
+        };
+    }
+    return null;
 }
 /**
  * Calculate bounding box for a given center point and radius in kilometers
@@ -119,7 +147,7 @@ async function generateAIClues(
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY environment variable is not set.');
     const openai = new OpenAI({ apiKey: OPENAI_API_KEY });
-    const prompt = `Generate ${numClues} scavenger hunt clues and answers as a logical progression, where each clue leads to the next, culminating in a final goal. The clues must be connected, with each clue's answer or location providing the context or access for the next clue. The final clue should lead to the ultimate goal or location.\n\nParameters:\n- Difficulty Level: ${difficulty}\n- Main Target: ${mainTarget || "(infer based on difficulty and theme)"}\n- Theme: ${theme || "(select based on prior narrative)"}\n\nRequirements:\n1. The clues must form a chain: each clue should logically lead to the next, and the final clue should reveal or require the ultimate goal.\n2. Each clue must include a clear, concise, and unambiguous answer in the 'answer' field. Do not leave the answer blank or vague.\n3. Each clue should be logically solvable, with subtle hints that encourage deduction.\n4. Clues should reflect the selected theme and target (or inferred ones) while maintaining narrative continuity and progression.\n5. Difficulty should influence complexity of clue structure—higher levels include layered metaphors, wordplay, or symbolic references.\n6. Output only a JSON array, no explanations or extra text. Each clue must have: question, answer, (optional) hint, and type.\n\nExample of a progressive clue chain:\n[\n  {"question": "Go to the restaurant downtown known for its deep-dish pizza and take a selfie outside.", "answer": "Photo at Giordano's restaurant", "type": "PHOTO_UPLOAD"},\n  {"question": "Now, visit the golf course where Chicago's famous baseball player relaxes. Take a selfie in the lobby.", "answer": "Photo at Harborside International Golf Center lobby", "type": "PHOTO_UPLOAD"},\n  {"question": "Finally, find the parking space number 22 at Wrigley Field and take a selfie there.", "answer": "Photo at parking space 22, Wrigley Field", "type": "PHOTO_UPLOAD"}\n]\n\nRespond in JSON array format, e.g.:\n[\n  {"question": "...", "answer": "...", "hint": "...", "type": "TEXT_ANSWER"},\n  {"question": "...", "answer": "...", "type": "PHOTO_UPLOAD"}\n]`;
+    const prompt = `Generate ${numClues} scavenger hunt clues and answers as a logical progression, where each clue leads to the next, culminating in a final goal. The clues must be connected, with each clue's answer or location providing the context or access for the next clue. The final clue should lead to the ultimate goal or location.\n\nParameters:\n- Difficulty Level: ${difficulty}\n- Main Target: ${mainTarget || "(infer based on difficulty and theme)"}\n- Theme: ${theme || "(select based on prior narrative)"}\n\nSTRICT REQUIREMENTS (do not violate any of these):\n1. The clues must form a chain: each clue should logically lead to the next, and the final clue should reveal or require the ultimate goal.\n2. Each clue must include a clear, concise, and unambiguous answer in the 'answer' field. Do not leave the answer blank or vague.\n3. Each clue should be logically solvable, with subtle hints that encourage deduction.\n4. Clues should reflect the selected theme and target (or inferred ones) while maintaining narrative continuity and progression.\n5. Difficulty should influence complexity of clue structure—higher levels include layered metaphors, wordplay, or symbolic references.\n6. Output only a JSON array, no explanations or extra text. Each clue must have: question, answer, (optional) hint, and type.\n7. UNDER NO CIRCUMSTANCES may any clue or answer reference the words 'ClueSet', 'clue set', 'clue-set', 'clueset', or any internal system name, code, or ID. All clues and answers must be natural, thematic, and never mention internal system details.\n\nExample of a progressive clue chain:\n[\n  {"question": "Go to the restaurant downtown known for its deep-dish pizza and take a selfie outside.", "answer": "Photo at Giordano's restaurant", "type": "PHOTO_UPLOAD"},\n  {"question": "Now, visit the golf course where Chicago's famous baseball player relaxes. Take a selfie in the lobby.", "answer": "Photo at Harborside International Golf Center lobby", "type": "PHOTO_UPLOAD"},\n  {"question": "Finally, find the parking space number 22 at Wrigley Field and take a selfie there.", "answer": "Photo at parking space 22, Wrigley Field", "type": "PHOTO_UPLOAD"}\n]\n\nRespond in JSON array format, e.g.:\n[\n  {"question": "...", "answer": "...", "hint": "...", "type": "TEXT_ANSWER"},\n  {"question": "...", "answer": "...", "type": "PHOTO_UPLOAD"}\n]`;
     const completion = await openai.chat.completions.create({
         model: 'gpt-4',
         messages: [
@@ -140,6 +168,10 @@ async function generateAIClues(
     if (!Array.isArray(clues) || clues.length === 0) {
         throw new Error('No clues returned from AI');
     }
+    const forbiddenTerms = [
+        'clueset', 'clue set', 'clue-set', 'ClueSet', 'Clue Set', 'Clue-Set', 'CLUESET', 'CLUE SET', 'CLUE-SET', 'clueSet', 'Clueset', 'CLUEset', 'cluesets', 'ClueSets', 'CLUESETS', 'clue sets', 'Clue Sets', 'CLUE SETS', 'clue_set', 'Clue_Set', 'CLUE_SET', 'clue_set_id', 'ClueSetId', 'clueSetId', 'CLUESETID', 'clue set id', 'Clue Set Id', 'CLUE SET ID', 'clue set number', 'Clue Set Number', 'CLUE SET NUMBER', 'clue set code', 'Clue Set Code', 'CLUE SET CODE', 'clue set reference', 'Clue Set Reference', 'CLUE SET REFERENCE', 'clue set name', 'Clue Set Name', 'CLUE SET NAME', 'clue set description', 'Clue Set Description', 'CLUE SET DESCRIPTION', 'clue set location', 'Clue Set Location', 'CLUE SET LOCATION', 'clue set center', 'Clue Set Center', 'CLUE SET CENTER', 'clue set radius', 'Clue Set Radius', 'CLUE SET RADIUS', 'clue set bounds', 'Clue Set Bounds', 'CLUE SET BOUNDS', 'clue set details', 'Clue Set Details', 'CLUE SET DETAILS', 'clue set info', 'Clue Set Info', 'CLUE SET INFO', 'clue set data', 'Clue Set Data', 'CLUE SET DATA', 'clue set internal', 'Clue Set Internal', 'CLUE SET INTERNAL', 'clue set system', 'Clue Set System', 'CLUE SET SYSTEM', 'clue set meta', 'Clue Set Meta', 'CLUE SET META', 'clue set id', 'clue set number', 'clue set code', 'clue set reference', 'clue set name', 'clue set description', 'clue set location', 'clue set center', 'clue set radius', 'clue set bounds', 'clue set details', 'clue set info', 'clue set data', 'clue set internal', 'clue set system', 'clue set meta'
+    ];
+    const forbiddenRegex = new RegExp(forbiddenTerms.join('|'), 'i');
     const validatedClues = clues.map((clue, idx) => {
         if (
             typeof clue.question !== 'string' ||
@@ -148,6 +180,9 @@ async function generateAIClues(
             clue.answer.trim().length <= 1
         ) {
             throw new Error(`Clue or answer missing, invalid, or too short at index ${idx}`);
+        }
+        if (forbiddenRegex.test(clue.question) || forbiddenRegex.test(clue.answer)) {
+            throw new Error(`Clue or answer at index ${idx} contains forbidden internal system references.`);
         }
         return {
             question: clue.question,
@@ -220,6 +255,15 @@ export async function assignParticipantToClueSet(
     gameId: string,
     location: Location
 ) {
+    // Get participant
+    const participant = await prisma.participant.findUnique({
+        where: { id: participantId },
+        select: { clueSetId: true }
+    });
+    // If already assigned, do nothing
+    if (participant?.clueSetId) {
+        return null;
+    }
     // Get participant progress (latest)
     const progress = await prisma.participantProgress.findFirst({
         where: { participantId },
@@ -230,7 +274,6 @@ export async function assignParticipantToClueSet(
     const level = progress.currentLevel;
     const stage = progress.currentStage;
     const stageId = progress.stageId;
-
 
     // 1. Check if a clue set exists for this location
     let clueSet = await findExistingClueSet(gameId, location);
@@ -321,12 +364,23 @@ export async function findExistingClueSet(
     gameId: string,
     location: Location
 ): Promise<{
-    id: string
-    name: string
-    description: string | null
-    centerLatitude: number
-    centerLongitude: number
-    radiusKm: number
+    id: string;
+    name: string;
+    description: string | null;
+    centerLatitude: number;
+    centerLongitude: number;
+    radiusKm: number;
+    createdAt: Date;
+    updatedAt: Date;
+    minLatitude: number;
+    maxLatitude: number;
+    minLongitude: number;
+    maxLongitude: number;
+    phase: string;
+    isActive: boolean;
+    gameId: string;
+    stageNumber: number;
+    levelNumber: number;
 } | null> {
     // First, do a rough bounding box search for performance
     const clueSets = await prisma.clueSet.findMany({
@@ -345,18 +399,28 @@ export async function findExistingClueSet(
             description: true,
             centerLatitude: true,
             centerLongitude: true,
-            radiusKm: true
+            radiusKm: true,
+            createdAt: true,
+            updatedAt: true,
+            minLatitude: true,
+            maxLatitude: true,
+            minLongitude: true,
+            maxLongitude: true,
+            phase: true,
+            isActive: true,
+            gameId: true,
+            stageNumber: true,
+            levelNumber: true
         }
     })
 
     // Then check exact distance for each candidate
     for (const clueSet of clueSets) {
         if (isPointInClueSet(location, clueSet)) {
-            return clueSet
+            return clueSet;
         }
     }
-
-    return null
+    return null;
 }
 
 /**

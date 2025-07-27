@@ -108,35 +108,21 @@ export async function POST(
         // const decoded = verifyToken(token)
 
         if (isCorrect) {
-            // In production, update user progress in database:
-            // await prisma.participant.update({
-            //   where: {
-            //     userId_gameId: {
-            //       userId: decoded.userId,
-            //       gameId
-            //     }
-            //   },
-            //   data: {
-            //     currentClue: clueNumber + 1,
-            //     pebbles: { increment: 10 },
-            //     lastPlayedAt: new Date()
-            //   }
-            // })
-
-            // Create clue submission record:
-            // await prisma.clueSubmission.create({
-            //   data: {
-            //     participantId: participant.id,
-            //     clueId: submissionData.clueId,
-            //     submissionType: submissionData.type,
-            //     textAnswer: submissionData.textAnswer,
-            //     photoUrl: submissionData.photoUrl,
-            //     isCorrect: true,
-            //     aiAnalysis: submissionData.aiAnalysis
-            //   }
-            // })
-
-            console.log('Progress updated for game:', gameId, 'clue:', clueNumber)
+            // Find participant and their current progress
+            const participant = await prisma.participant.findFirst({
+                where: { gameId },
+                include: { progress: true }
+            });
+            if (participant && participant.progress.length > 0) {
+                const progress = participant.progress[0];
+                // Increment currentClue
+                await prisma.participantProgress.update({
+                    where: { id: progress.id },
+                    data: {
+                        currentClue: clueNumber + 1
+                    }
+                });
+            }
         }
 
         // Return updated progress
