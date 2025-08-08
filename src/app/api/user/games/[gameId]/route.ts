@@ -1,3 +1,14 @@
+// Local type for badge to avoid 'any'
+type BadgeTypeLocal = {
+    id: string;
+    name: string;
+    description?: string | null;
+    imageUrl?: string | null;
+    badgeType: string;
+    levelNumber: number;
+    stageNumber?: number | null;
+    earnedAt?: Date;
+};
 import { getTokenFromHeader, verifyTokenAndUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { NextRequest, NextResponse } from 'next/server';
@@ -78,23 +89,26 @@ export async function GET(req: NextRequest, { params }: { params: { gameId: stri
             where: { gameId }
         });
 
+        // Ensure progress is always an array
+        const progressArr = Array.isArray(participant.progress) ? participant.progress : (participant.progress ? [participant.progress] : []);
         // Map badges (flatten all progress badges)
-        const badges = (participant.progress || [])
+        const badges = progressArr
             .flatMap((prog) =>
-                (prog.badges || []).map((badge) => ({
-                    id: badge.id,
-                    name: badge.name,
-                    description: badge.description ?? '',
-                    imageUrl: badge.imageUrl ?? '',
-                    badgeType: badge.badgeType,
-                    levelNumber: badge.levelNumber,
-                    stageNumber: badge.stageNumber ?? null,
-                    earnedAt: badge.earnedAt.toISOString()
-                }))
+                Array.isArray(prog.badges)
+                    ? prog.badges.map((badge: BadgeTypeLocal) => ({
+                        id: badge.id,
+                        name: badge.name,
+                        description: badge.description ?? '',
+                        imageUrl: badge.imageUrl ?? '',
+                        badgeType: badge.badgeType,
+                        levelNumber: badge.levelNumber,
+                        stageNumber: badge.stageNumber ?? null,
+                        earnedAt: badge.earnedAt?.toISOString?.() || ''
+                    }))
+                    : []
             );
-
         // Map progress
-        const progress = (participant.progress || []).map((prog) => ({
+        const progress = progressArr.map((prog) => ({
             currentLevel: prog.currentLevel,
             currentStage: prog.currentStage,
             currentHunt: prog.currentHunt,

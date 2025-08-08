@@ -3,7 +3,7 @@
 import PirateMapLoader from "@/components/PirateMapLoader";
 import { showToast } from "@/lib/toast";
 import Image from "next/image";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 interface Badge {
@@ -34,6 +34,7 @@ interface Submission {
 export default function PlayGame() {
 
   const params = useParams();
+  const router = useRouter();
   const gameId = params.gameId as string;
 
   const [showPirateMap, setShowPirateMap] = useState(true);
@@ -171,6 +172,11 @@ export default function PlayGame() {
       const data = await res.json();
       setLastSubmission(data.submission);
       if (data.submission.isCorrect) {
+        if (data.successRedirectUrl) {
+          // Navigate to the clue-success page immediately
+          router.push(data.successRedirectUrl);
+          return;
+        }
         // If stage badge is awarded, show stage complete UI
         if (data.awardedStageBadge) {
           setAwardedStageBadge(data.awardedStageBadge);
@@ -206,7 +212,7 @@ export default function PlayGame() {
     } finally {
       setSubmitting(false);
     }
-  }, [currentClue, location, textAnswer, selectedFile, gameId, fetchClue]);
+  }, [currentClue, location, textAnswer, gameId, fetchClue, router]);
 
 
   // Request geolocation on mount
@@ -279,6 +285,12 @@ export default function PlayGame() {
             <p className="text-gray-600 mb-6">
               Get ready for the next stage!
             </p>
+            <button
+              onClick={() => (window.location.href = "/dashboard")}
+              className="bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700"
+            >
+              Return to Dashboard
+            </button>
           </div>
         </div>
       </div>

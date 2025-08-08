@@ -1,15 +1,15 @@
+import { getTokenFromHeader, verifyToken } from '@/lib/auth'
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyToken, getTokenFromHeader } from '@/lib/auth'
 
 // Manage scavenger stones for participants
 export async function GET(request: NextRequest) {
   try {
     const { prisma } = await import('@/lib/prisma')
-    
+
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
-    
+
     if (!token) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -38,15 +38,7 @@ export async function GET(request: NextRequest) {
       },
       select: {
         id: true,
-        pebbles: true,
-        // scavengerStones will be available once schema is updated
-        game: {
-          select: {
-            id: true,
-            title: true,
-            location: true
-          }
-        }
+        scavengerStones: true
       }
     })
 
@@ -60,9 +52,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       participant: {
         id: participant.id,
-        pebbles: participant.pebbles,
-        scavengerStones: 0, // Will be updated when schema is active
-        game: participant.game
+        scavengerStones: participant.scavengerStones
       }
     })
 
@@ -79,11 +69,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const { prisma } = await import('@/lib/prisma')
-    
+
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
-    
+
     if (!token) {
       return NextResponse.json(
         { error: 'Authentication required' },
@@ -103,7 +93,7 @@ export async function POST(request: NextRequest) {
 
     // For now, just log the stone award
     // Once schema is updated, we'll actually update the scavengerStones field
-    
+
     // Log stone award activity
     try {
       await prisma.activity.create({

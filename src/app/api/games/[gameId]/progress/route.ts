@@ -41,7 +41,13 @@ export async function GET(
 
         // Use the first progress record (if any)
         const progress = Array.isArray(participant.progress) && participant.progress.length > 0 ? participant.progress[0] : null;
-        const currentStage = progress?.stageId || null;
+        let currentStage = null;
+        let stageNumber = null;
+        if (progress?.stageId) {
+            const stage = await prisma.stage.findUnique({ where: { id: progress.stageId }, select: { stageNumber: true } });
+            stageNumber = stage?.stageNumber || null;
+        }
+        currentStage = stageNumber;
         const currentLevel = progress?.currentLevel || 1;
         const currentHunt = progress?.currentHunt || 1;
         const currentClue = progress?.currentClue || 1;
@@ -59,7 +65,6 @@ export async function GET(
             stagesCompletedInLevel: progress?.stagesCompletedInLevel ?? 0,
             canAdvanceToNextStage: progress?.canAdvanceToNextStage ?? false,
             canAdvanceToNextLevel: progress?.canAdvanceToNextLevel ?? false,
-            pebbles: participant.pebbles ?? 0,
             scavengerStones: participant.scavengerStones ?? 0,
             lastLocation: {
                 latitude: participant.currentLatitude ?? null,
@@ -92,55 +97,200 @@ export async function POST(
     { params }: { params: Promise<{ gameId: string }> }
 ) {
     try {
-        const { gameId } = await params
-        const { clueNumber, isCorrect, submissionData } = await request.json() // eslint-disable-line @typescript-eslint/no-unused-vars
+        const { gameId } = await params;
+        const { clueNumber, isCorrect } = await request.json();
 
-        // Authentication would be checked here
-        // const authHeader = request.headers.get('authorization')
-        // const token = getTokenFromHeader(authHeader)
-        // if (!token) {
-        //   return NextResponse.json(
-        //     { error: 'Authentication required' },
-        //     { status: 401 }
-        //   )
-        // }
+        // Find participant and their current progress
+        const participant = await prisma.participant.findFirst({
+            where: { gameId },
+            include: {
+                progress: true,
+                submissions: {
+                    where: { isCorrect: true },
+                    orderBy: { submittedAt: 'asc' }
+                }
+            }
+        });
+        if (!participant) {
+            return NextResponse.json({ error: 'No progress found for this user in this game' }, { status: 404 });
+        }
+        const progress = Array.isArray(participant.progress) && participant.progress.length > 0 ? participant.progress[0] : null;
+        if (!progress) {
+            return NextResponse.json({ error: 'No progress record found for this participant.' }, { status: 404 });
+        }
+        let nextClueNumber = clueNumber;
 
-        // const decoded = verifyToken(token)
+        // Fetch stage and level info (handle missing stageId)
+        let stage = null;
+        let level = null;
+        let levelNumber = 1;
+        let stageNumber = 1;
+        if (progress.stageId) {
+            stage = await prisma.stage.findUnique({
+                where: { id: progress.stageId },
+                select: { id: true, badgeName: true, badgeDescription: true, badgeImage: true, levelId: true, stageNumber: true }
+            });
+            if (stage?.levelId) {
+                level = await prisma.level.findUnique({ where: { id: stage.levelId }, select: { id: true, levelNumber: true } });
+                levelNumber = level?.levelNumber || 1;
+            }
+            stageNumber = stage?.stageNumber || 1;
+        }
+
+        // Get all clues in this stage (handle missing stageId)
+        let allClues: { clueNumber: number }[] = [];
+        let currentIndex = -1;
+        if (progress.stageId) {
+            allClues = await prisma.clue.findMany({
+                where: {
+                    hunt: {
+                        stageId: progress.stageId,
+                        ...(participant.clueSetId && { clueSetId: participant.clueSetId })
+                    }
+                },
+                orderBy: { clueNumber: 'asc' }
+            });
+            currentIndex = allClues.findIndex((c: { clueNumber: number }) => c.clueNumber === clueNumber);
+        }
 
         if (isCorrect) {
-            // Find participant and their current progress
-            const participant = await prisma.participant.findFirst({
-                where: { gameId },
-                include: { progress: true }
-            });
-            if (participant && participant.progress.length > 0) {
-                const progress = participant.progress[0];
-                // Increment currentClue
+            // Always update to the next step if answered correctly
+            const TOTAL_STAGES = 4;
+            const TOTAL_LEVELS = 12;
+            if (currentIndex < allClues.length - 1) {
+                // Progress to next clue in this stage
+                nextClueNumber = allClues[currentIndex + 1].clueNumber;
                 await prisma.participantProgress.update({
                     where: { id: progress.id },
+                    data: { currentClue: nextClueNumber }
+                });
+            } else {
+                // Stage complete: mark progress as complete
+                await prisma.participantProgress.update({
+                    where: { id: progress.id },
+                    data: { completedAt: new Date() }
+                });
+                // Award stage badge
+                await prisma.badge.create({
                     data: {
-                        currentClue: clueNumber + 1
+                        name: stage?.badgeName || 'Stage Complete',
+                        description: stage?.badgeDescription || 'Completed all clues in this stage',
+                        imageUrl: stage?.badgeImage || `/assets/badges/level${levelNumber}_stage${stageNumber}.png`,
+                        badgeType: 'STAGE',
+                        levelNumber,
+                        stageNumber,
+                        progressId: progress.id
                     }
                 });
+                if (stageNumber < TOTAL_STAGES) {
+                    // Find the next stage in this level
+                    let nextStage = null;
+                    if (stage) {
+                        nextStage = await prisma.stage.findFirst({
+                            where: {
+                                levelId: stage.levelId,
+                                stageNumber: stageNumber + 1
+                            },
+                            select: { id: true }
+                        });
+                    }
+                    if (nextStage) {
+                        const newProgress = await prisma.participantProgress.create({
+                            data: {
+                                participantId: participant.id,
+                                stageId: nextStage.id,
+                                currentClue: 1
+                            }
+                        });
+                        // Update participant's progress reference
+                        try {
+                            const patchRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/games/${gameId}/participants`, {
+                                method: 'PATCH',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    Authorization: request.headers.get('authorization') || ''
+                                },
+                                body: JSON.stringify({ participantId: participant.id, progressId: newProgress.id })
+                            });
+                            if (!patchRes.ok) {
+                                const err = await patchRes.json();
+                                throw new Error(`Failed to update participant progress: ${err.error || patchRes.status}`);
+                            }
+                        } catch (err) {
+                            console.error('Error updating participant progress reference:', err);
+                        }
+                    }
+                } else if (levelNumber < TOTAL_LEVELS) {
+                    // All stages in this level complete, award level badge
+                    await prisma.badge.create({
+                        data: {
+                            name: `Level ${levelNumber} Platinum`,
+                            description: `Earned by completing all 4 stages in Level ${levelNumber}`,
+                            imageUrl: `/assets/badges/level${levelNumber}_platinum.png`,
+                            badgeType: 'LEVEL',
+                            levelNumber,
+                            stageNumber: null,
+                            progressId: progress.id
+                        }
+                    });
+                    // Find the first stage of the next level
+                    const nextLevel = await prisma.level.findFirst({
+                        where: {
+                            gameId: participant.gameId,
+                            levelNumber: levelNumber + 1
+                        },
+                        select: { id: true }
+                    });
+                    if (nextLevel) {
+                        const firstStage = await prisma.stage.findFirst({
+                            where: {
+                                levelId: nextLevel.id,
+                                stageNumber: 1
+                            },
+                            select: { id: true }
+                        });
+                        if (firstStage) {
+                            const newProgress = await prisma.participantProgress.create({
+                                data: {
+                                    participantId: participant.id,
+                                    stageId: firstStage.id,
+                                    currentClue: 1
+                                }
+                            });
+                            // Update participant's progress reference
+                            try {
+                                const patchRes = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/games/${gameId}/participants`, {
+                                    method: 'PATCH',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        Authorization: request.headers.get('authorization') || ''
+                                    },
+                                    body: JSON.stringify({ participantId: participant.id, progressId: newProgress.id })
+                                });
+                                if (!patchRes.ok) {
+                                    const err = await patchRes.json();
+                                    throw new Error(`Failed to update participant progress: ${err.error || patchRes.status}`);
+                                }
+                            } catch (err) {
+                                console.error('Error updating participant progress reference:', err);
+                            }
+                        }
+                    }
+                } else {
+                    // All levels, stages complete (do nothing)
+                }
             }
         }
 
-        // Return updated progress
-        const nextClueNumber = isCorrect ? clueNumber + 1 : clueNumber
-        const isGameComplete = isCorrect && nextClueNumber > 10
-
         return NextResponse.json({
-            success: true,
-            nextClueNumber: isGameComplete ? null : nextClueNumber,
-            isGameComplete,
-            pebblesEarned: isCorrect ? 10 : 0
-        })
+            success: true
+        });
 
     } catch (error) {
-        console.error('Error updating progress:', error)
+        console.error('Error updating progress:', error);
         return NextResponse.json(
             { error: 'Internal server error' },
             { status: 500 }
-        )
+        );
     }
 }

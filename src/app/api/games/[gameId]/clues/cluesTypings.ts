@@ -1,10 +1,3 @@
-export // Enhanced geographic restriction check based on game phases
-    type GeographicRestrictionResult = {
-        isRestricted: boolean;
-        reason?: string;
-        suggestedAction?: string;
-    };
-
 export type Clue = { id: string; clueNumber: number; question: string; hint?: string | null; type: string; huntId: string };
 
 export interface GeneratedHunt {
@@ -34,5 +27,5 @@ interface GeneratedClue {
     requiredLatitude?: number | null;
     requiredLongitude?: number | null;
     locationRadius?: number | null;
-    aiContext?: unknown;
+    aiContext?: string;
 }

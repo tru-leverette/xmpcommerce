@@ -126,7 +126,12 @@ export default function UserGameDetailPage() {
                     <div className="flex items-center gap-4 mb-6">
                         <span className="inline-block bg-yellow-300 rounded-full p-3 shadow-lg text-3xl">🗺️</span>
                         <h1 className="text-4xl font-extrabold text-brown-900 tracking-tight drop-shadow-lg">{game.title}</h1>
-                        <Link href={`/games/${game.id}/access`} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-green-400 text-brown-900 font-extrabold rounded-lg shadow-lg hover:scale-105 hover:from-yellow-300 hover:to-green-300 transition-transform text-lg">
+                        <Link
+                            href={game.status === 'ACTIVE' ? `/games/${game.id}/access` : '#'}
+                            className={`inline-flex items-center gap-2 px-6 py-3 font-extrabold rounded-lg shadow-lg text-lg transition-transform ${game.status === 'ACTIVE' ? 'bg-gradient-to-r from-yellow-400 to-green-400 text-brown-900 hover:scale-105 hover:from-yellow-300 hover:to-green-300' : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60 pointer-events-none'}`}
+                            aria-disabled={game.status !== 'ACTIVE'}
+                            tabIndex={game.status === 'ACTIVE' ? 0 : -1}
+                        >
                             <span>Continue Game</span>
                             <span className="text-2xl">🧭</span>
                         </Link>

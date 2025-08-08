@@ -23,35 +23,6 @@ The system prevents clue set overlaps by:
 3. **Position Optimization**: If overlap detected, finds alternative position using spiral search pattern
 4. **Fallback**: If no position found (rare), logs warning and proceeds
 
-### 3. Database Schema
-
-New tables added:
-
-```sql
--- ClueSet table stores geolocation-based clue areas
-CREATE TABLE clue_sets (
-  id VARCHAR(191) PRIMARY KEY,
-  name VARCHAR(191) NOT NULL,
-  description TEXT,
-  centerLatitude DOUBLE NOT NULL,
-  centerLongitude DOUBLE NOT NULL,
-  radiusKm DOUBLE DEFAULT 16.09344, -- 10 miles
-  minLatitude DOUBLE NOT NULL,      -- Bounding box for fast lookup
-  maxLatitude DOUBLE NOT NULL,
-  minLongitude DOUBLE NOT NULL,
-  maxLongitude DOUBLE NOT NULL,
-  isActive BOOLEAN DEFAULT true,
-  gameId VARCHAR(191) NOT NULL,
-  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-  updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-);
-
--- Updated Participant table with clue set assignment
-ALTER TABLE participants ADD COLUMN clueSetId VARCHAR(191);
-
--- Updated Hunt table to link to clue sets
-ALTER TABLE hunts ADD COLUMN clueSetId VARCHAR(191);
-```
 
 ## Implementation Examples
 
@@ -125,13 +96,6 @@ POST /api/games/{gameId}/clue-sets
 - Participant assignment and progress tracking
 
 ## Testing the System
-
-### Test Page Available
-
-Visit `/games/{gameId}/clue-sets-test` to test the system with:
-
-1. **Predefined test locations** for Calabar, Nigeria
-2. **Manual coordinate input**
 3. **Actions**:
    - Test assignment logic
    - Create test clue sets
@@ -147,14 +111,15 @@ Visit `/games/{gameId}/clue-sets-test` to test the system with:
 
 ## Real-World Usage
 
-### Nigeria Example
+### Test Conditions
+  - ClueSet radius is 10 miles
 
 ```javascript
 // Marion District, Calabar
-const location1 = { lat: 4.9518, lng: 8.3229 }
+const ParticipantLocation1 = { lat: 4.9518, lng: 8.3229 }
 
 // Marina Area, Calabar (about 0.8 miles away)
-const location2 = { lat: 4.9545, lng: 8.3156 }
+const ParticipantLocation2 = { lat: 4.9545, lng: 8.3156 }
 
 // These would share the same clue set as they're within 10 miles
 ```

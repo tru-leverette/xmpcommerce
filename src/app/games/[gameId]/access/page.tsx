@@ -2,7 +2,7 @@
 import PirateMapLoader from '@/components/PirateMapLoader';
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getGame, getUserCoordinates } from './accessCheck';
+import { getGame } from './accessCheck';
 import { Game } from './accessTypes';
 
 
@@ -26,6 +26,7 @@ export default function GameAccess() {
     const params = useParams();
     const router = useRouter();
     const gameId = params.gameId as string;
+    // Use stored participant coordinates from progress
     const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [loading, setLoading] = useState(true);
     const [eligible, setEligible] = useState<boolean | null>(null);
@@ -33,7 +34,7 @@ export default function GameAccess() {
     // const [progress, setProgress] = useState<Progress | null>(null);
     // const [game, setGame] = useState<Game | null>(null);
 
-    // Fetch user, coordinates, game, and progress info on mount
+    // Fetch user, game, and progress info on mount (and get stored coordinates from progress)
     useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
@@ -47,39 +48,28 @@ export default function GameAccess() {
                     return;
                 }
 
-                const userCoords = await getUserCoordinates();
-                setCoords(userCoords);
-                if (!userCoords) {
-                    reasons.push('Could not determine your location.');
-                    setEligible(false);
-                    setReasons(reasons);
-                    setLoading(false);
-                    return;
-                }
-
-
                 const gameData: Game | null = await getGame(gameId);
                 if (!gameData) {
                     reasons.push('Game not found or inaccessible.');
                 }
 
-
-                // Fetch progress
+                // Fetch progress (should include stored coordinates)
                 const progressRes = await fetch(`/api/games/${gameId}/progress`, { headers: { Authorization: `Bearer ${token}` } });
                 let progressData: Progress | null = null;
+                let storedCoords: { lat: number; lng: number } | null = null;
                 if (progressRes.ok) {
                     const data = await progressRes.json();
                     progressData = data.progress;
+                    // Assume progressData contains stored coordinates (adjust field names as needed)
+                    if (progressData && typeof progressData.lat === 'number' && typeof progressData.lng === 'number') {
+                        storedCoords = { lat: progressData.lat, lng: progressData.lng };
+                    }
                 } else {
                     reasons.push('No progress found for this game.');
                 }
                 // Eligibility checks
                 if (gameData && progressData) {
                     if (gameData.status !== 'ACTIVE') reasons.push('This game is not currently active.');
-                    // For testing, ignore stone count restriction
-                    // if (typeof gameData.minScavengerStones === 'number' && progressData.scavengerStones < gameData.minScavengerStones) {
-                    //     reasons.push(`You need at least ${gameData.minScavengerStones} scavenger stones to play.`);
-                    // }
                     if (progressData.isGameComplete) reasons.push('You have already completed this game.');
                 }
                 if (reasons.length === 0) {
@@ -87,6 +77,8 @@ export default function GameAccess() {
                 } else {
                     setEligible(false);
                 }
+                // Set stored coordinates for use in clue set assignment
+                setCoords(storedCoords);
             } catch {
                 reasons.push('An unexpected error occurred.');
                 setEligible(false);
@@ -121,7 +113,7 @@ export default function GameAccess() {
             };
             assignClueSetAndNavigate();
         }
-    }, [eligible, coords, gameId, router]);
+    }, [eligible, gameId, router, coords]);
 
     // UI
     if (loading) {

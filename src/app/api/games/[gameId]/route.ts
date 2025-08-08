@@ -14,8 +14,6 @@ export async function PUT(
     // Lazy load dependencies
     const { prisma } = await import('@/lib/prisma')
     const { verifyToken, getTokenFromHeader } = await import('@/lib/auth')
-
-    const { gameId } = await params
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
@@ -60,6 +58,7 @@ export async function PUT(
     }
 
     // Get the current game to check if location is changing
+    const { gameId } = await params
     const currentGame = await prisma.game.findUnique({
       where: { id: gameId }
     })
@@ -278,12 +277,17 @@ export async function DELETE(
 
     // Delete all related records in the correct order to respect foreign key constraints
     await prisma.$transaction(async (tx) => {
+
+      // Get all participant IDs for this game
+      const participantIds = (await tx.participant.findMany({
+        where: { gameId },
+        select: { id: true }
+      })).map(p => p.id);
+
       // Delete clue submissions first
       await tx.clueSubmission.deleteMany({
         where: {
-          participant: {
-            gameId: gameId
-          }
+          participantId: { in: participantIds }
         }
       })
 
@@ -315,9 +319,7 @@ export async function DELETE(
       await tx.badge.deleteMany({
         where: {
           progress: {
-            participant: {
-              gameId: gameId
-            }
+            participantId: { in: participantIds }
           }
         }
       })
@@ -325,30 +327,11 @@ export async function DELETE(
       // Delete participant progress
       await tx.participantProgress.deleteMany({
         where: {
-          participant: {
-            gameId: gameId
-          }
+          participantId: { in: participantIds }
         }
       })
 
-      // Delete transactions and wallets
-      await tx.transaction.deleteMany({
-        where: {
-          wallet: {
-            participant: {
-              gameId: gameId
-            }
-          }
-        }
-      })
-
-      await tx.wallet.deleteMany({
-        where: {
-          participant: {
-            gameId: gameId
-          }
-        }
-      })
+      // Skipping wallet and transaction deletion: participant does not have a wallet relation.
 
       // Delete participants
       await tx.participant.deleteMany({
@@ -426,7 +409,7 @@ export async function GET(
   try {
     const { prisma } = await import('@/lib/prisma');
     const { verifyToken, getTokenFromHeader } = await import('@/lib/auth');
-    const { gameId } = params;
+    const { gameId } = await params;
     const authHeader = request.headers.get('authorization');
     const token = getTokenFromHeader(authHeader);
     if (!token) {
