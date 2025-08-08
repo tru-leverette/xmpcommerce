@@ -1,1 +1,0 @@
-This file was previously used for AI clue generation but is no longer referenced anywhere in the codebase. All robust AI clue generation logic is now handled in the backend (see clueSetManager.ts). Safe to delete.

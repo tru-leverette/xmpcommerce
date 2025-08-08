@@ -1,14 +1,10 @@
 import { verifyToken } from '@/lib/auth';
-import {
-    calculateDistance,
-    createClueSet,
-    findExistingClueSet,
-    type Location
-} from '@/lib/clueSetManager';
 import { prisma } from '@/lib/prisma';
+import { Location } from '@/types/location';
 import { NextRequest, NextResponse } from 'next/server';
+import { handleCreateTestClueSet, handleListClueSets, handleTestAssignment } from './clueSetActions';
 
-// Test endpoint to demonstrate clue set assignment
+// endpoint to test access to clue set assignment
 export async function POST(
     request: NextRequest,
     { params }: { params: Promise<{ gameId: string }> }
@@ -47,162 +43,15 @@ export async function POST(
         }
 
         if (action === 'test-assignment') {
-            let clueSet = await findExistingClueSet(gameId, location);
-            let created = false;
-            let stageId: string = '';
-            let level = await prisma.level.findFirst({ where: { gameId } });
-            if (!level) {
-                level = await prisma.level.create({
-                    data: {
-                        gameId,
-                        levelNumber: 1,
-                        name: 'Level 1',
-                        description: 'Auto-created Level 1',
-                    },
-                });
-            }
-            let stage = await prisma.stage.findFirst({ where: { levelId: level.id } });
-            if (!stage) {
-                stage = await prisma.stage.create({
-                    data: {
-                        levelId: level.id,
-                        stageNumber: 1,
-                        name: 'Stage 1',
-                        description: 'Auto-created Stage 1',
-                    },
-                });
-            }
-            stageId = stage.id;
-            if (!clueSet) {
-                const locationName = `ClueSet-${Math.round(location.lat * 1000)}-${Math.round(location.lng * 1000)}`;
-                clueSet = await createClueSet({
-                    gameId,
-                    location,
-                    name: locationName,
-                    description: `Auto-generated clue set for location ${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`,
-                    phase: 'PHASE_1',
-                    level: 1,
-                    stage: 1,
-                    cluesCount: 4,
-                    stageId
-                });
-                created = true;
-            }
-            if (!clueSet) {
-                return NextResponse.json({ error: 'Failed to create or find clue set' }, { status: 500 });
-            }
-            const distance = calculateDistance(
-                location,
-                { lat: clueSet.centerLatitude, lng: clueSet.centerLongitude }
-            );
-            const response = {
-                id: clueSet.id,
-                name: clueSet.name,
-                description: clueSet.description,
-                center: {
-                    lat: clueSet.centerLatitude,
-                    lng: clueSet.centerLongitude
-                },
-                radius: `${clueSet.radiusKm} km`,
-                distance: `${distance.toFixed(2)} km`,
-                created
-            };
-            return NextResponse.json({ result: created ? 'created' : 'existing_clue_set', clueSet: response });
+            return await handleTestAssignment({ gameId, decoded, prisma, NextResponse });
         }
 
         if (action === 'create-test-clue-set') {
-            let level = await prisma.level.findFirst({ where: { gameId } });
-            if (!level) {
-                level = await prisma.level.create({
-                    data: {
-                        gameId,
-                        levelNumber: 1,
-                        name: 'Level 1',
-                        description: 'Auto-created Level 1',
-                    },
-                });
-            }
-            let stage = await prisma.stage.findFirst({ where: { levelId: level.id } });
-            if (!stage) {
-                stage = await prisma.stage.create({
-                    data: {
-                        levelId: level.id,
-                        stageNumber: 1,
-                        name: 'Stage 1',
-                        description: 'Auto-created Stage 1',
-                    },
-                });
-            }
-            const locationName = `Test-${Math.round(lat * 1000)}-${Math.round(lng * 1000)}`;
-            const clueSet = await createClueSet({
-                gameId,
-                location,
-                name: locationName,
-                description: `Test clue set for location ${lat.toFixed(4)}, ${lng.toFixed(4)}`,
-                phase: 'PHASE_1',
-                level: 1,
-                stage: 1,
-                cluesCount: 4,
-                stageId: stage.id
-            });
-
-            return NextResponse.json({
-                result: 'created',
-                clueSet: {
-                    id: clueSet.id,
-                    name: clueSet.name,
-                    description: clueSet.description,
-                    center: {
-                        lat: clueSet.centerLatitude,
-                        lng: clueSet.centerLongitude
-                    },
-                    radius: `${clueSet.radiusKm} km`
-                }
-            });
+            return await handleCreateTestClueSet({ gameId, location, prisma, NextResponse });
         }
 
         if (action === 'list-clue-sets') {
-            const clueSets = await prisma.clueSet.findMany({
-                where: { gameId, isActive: true },
-                include: {
-                    participants: {
-                        select: {
-                            id: true,
-                            user: {
-                                select: {
-                                    username: true
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            const clueSetInfo = clueSets.map((cs: {
-                id: string;
-                name: string;
-                description: string | null;
-                centerLatitude: number;
-                centerLongitude: number;
-                radiusKm: number;
-                participants: Array<{ id: string; user: { username: string } }>;
-            }) => ({
-                id: cs.id,
-                name: cs.name,
-                description: cs.description,
-                center: {
-                    lat: cs.centerLatitude,
-                    lng: cs.centerLongitude
-                },
-                radius: `${cs.radiusKm} km`,
-                participantCount: cs.participants.length,
-                participants: cs.participants.map((p: { user: { username: string } }) => p.user.username)
-            }));
-
-            return NextResponse.json({
-                result: 'listed',
-                clueSets: clueSetInfo
-            });
+            return await handleListClueSets({ gameId, prisma, NextResponse });
         }
 
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

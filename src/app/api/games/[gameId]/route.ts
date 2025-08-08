@@ -14,8 +14,6 @@ export async function PUT(
     // Lazy load dependencies
     const { prisma } = await import('@/lib/prisma')
     const { verifyToken, getTokenFromHeader } = await import('@/lib/auth')
-
-    const { gameId } = await params
     // Authentication check
     const authHeader = request.headers.get('authorization')
     const token = getTokenFromHeader(authHeader)
@@ -60,6 +58,7 @@ export async function PUT(
     }
 
     // Get the current game to check if location is changing
+    const { gameId } = await params
     const currentGame = await prisma.game.findUnique({
       where: { id: gameId }
     })
@@ -278,12 +277,17 @@ export async function DELETE(
 
     // Delete all related records in the correct order to respect foreign key constraints
     await prisma.$transaction(async (tx) => {
+
+      // Get all participant IDs for this game
+      const participantIds = (await tx.participant.findMany({
+        where: { gameId },
+        select: { id: true }
+      })).map(p => p.id);
+
       // Delete clue submissions first
       await tx.clueSubmission.deleteMany({
         where: {
-          participant: {
-            gameId: gameId
-          }
+          participantId: { in: participantIds }
         }
       })
 
@@ -291,10 +295,8 @@ export async function DELETE(
       await tx.clue.deleteMany({
         where: {
           hunt: {
-            stage: {
-              level: {
-                gameId: gameId
-              }
+            clueSet: {
+              gameId: gameId
             }
           }
         }
@@ -303,10 +305,8 @@ export async function DELETE(
       // Delete hunts
       await tx.hunt.deleteMany({
         where: {
-          stage: {
-            level: {
-              gameId: gameId
-            }
+          clueSet: {
+            gameId: gameId
           }
         }
       })
@@ -315,9 +315,7 @@ export async function DELETE(
       await tx.badge.deleteMany({
         where: {
           progress: {
-            participant: {
-              gameId: gameId
-            }
+            participantId: { in: participantIds }
           }
         }
       })
@@ -325,30 +323,11 @@ export async function DELETE(
       // Delete participant progress
       await tx.participantProgress.deleteMany({
         where: {
-          participant: {
-            gameId: gameId
-          }
+          participantId: { in: participantIds }
         }
       })
 
-      // Delete transactions and wallets
-      await tx.transaction.deleteMany({
-        where: {
-          wallet: {
-            participant: {
-              gameId: gameId
-            }
-          }
-        }
-      })
-
-      await tx.wallet.deleteMany({
-        where: {
-          participant: {
-            gameId: gameId
-          }
-        }
-      })
+      // Skipping wallet and transaction deletion: participant does not have a wallet relation.
 
       // Delete participants
       await tx.participant.deleteMany({
@@ -365,20 +344,7 @@ export async function DELETE(
       })
 
       // Delete stages
-      await tx.stage.deleteMany({
-        where: {
-          level: {
-            gameId: gameId
-          }
-        }
-      })
-
-      // Delete levels
-      await tx.level.deleteMany({
-        where: {
-          gameId: gameId
-        }
-      })
+      // Stages and levels removed from schema, no longer need to delete
 
       // Finally delete the game
       await tx.game.delete({
@@ -415,5 +381,57 @@ export async function DELETE(
       { error: 'Internal server error' },
       { status: 500 }
     )
+  }
+}
+
+// DEBUG: GET game details with extra diagnostics
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { gameId: string } }
+) {
+  try {
+    const { prisma } = await import('@/lib/prisma');
+    const { verifyToken, getTokenFromHeader } = await import('@/lib/auth');
+    const { gameId } = await params;
+    const authHeader = request.headers.get('authorization');
+    const token = getTokenFromHeader(authHeader);
+    if (!token) {
+      return NextResponse.json({ error: 'Authentication required', debug: { gameId, tokenPresent: false } }, { status: 401 });
+    }
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return NextResponse.json({ error: 'Invalid or expired authentication token', debug: { gameId, tokenPresent: true } }, { status: 401 });
+    }
+    // Find the game and include all relevant relations
+    const game = await prisma.game.findUnique({
+      where: { id: gameId },
+      include: {
+        creator: true,
+        levels: { include: { stages: true } },
+        participants: true,
+      },
+    });
+    if (!game) {
+      return NextResponse.json({ error: 'Game not found', debug: { gameId, found: false } }, { status: 404 });
+    }
+    // Check for required relations
+    const hasLevels = Array.isArray(game.levels) && game.levels.length > 0;
+    const hasStages = hasLevels && game.levels.some(l => Array.isArray(l.stages) && l.stages.length > 0);
+    const hasCreator = !!game.creator;
+    // Return all debug info
+    return NextResponse.json({
+      game,
+      debug: {
+        gameId,
+        found: true,
+        status: game.status,
+        hasLevels,
+        hasStages,
+        hasCreator,
+        participants: game.participants.length,
+      },
+    });
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal server error', debug: { message: (error as Error).message } }, { status: 500 });
   }
 }

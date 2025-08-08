@@ -92,13 +92,22 @@ export default function UserGameDetailPage() {
         );
     }
 
+    // Find the latest progress (by highest level, then stage, then hunt, then clue)
+    let latestProgress: typeof game.progress[0] | null = null;
+    if (game.progress.length > 0) {
+        latestProgress = game.progress.reduce((latest, curr) => {
+            if (!latest) return curr;
+            if (curr.currentLevel > latest.currentLevel) return curr;
+            if (curr.currentLevel === latest.currentLevel && curr.currentStage > latest.currentStage) return curr;
+            if (curr.currentLevel === latest.currentLevel && curr.currentStage === latest.currentStage && curr.currentHunt > latest.currentHunt) return curr;
+            if (curr.currentLevel === latest.currentLevel && curr.currentStage === latest.currentStage && curr.currentHunt === latest.currentHunt && curr.currentClue > latest.currentClue) return curr;
+            return latest;
+        }, game.progress[0]);
+    }
     return (
         <ProtectedRouteGuard>
             <div className="min-h-screen bg-gradient-to-br from-yellow-100 via-green-100 to-blue-100 relative overflow-hidden">
-                {/* Decorative map/parchment background */}
-                {/* <div className="absolute inset-0 pointer-events-none select-none opacity-30 z-0" style={{ backgroundImage: 'url(/parrot_logo.png), url(/public/globe.svg)', backgroundRepeat: 'no-repeat', backgroundPosition: 'top right, bottom left', backgroundSize: '200px, 300px' }}></div> */}
                 <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 pb-8 relative z-10">
-                    {/* Breadcrumb */}
                     <nav aria-label="Breadcrumb" className="mb-4">
                         <ol className="flex items-center space-x-2 text-sm text-brown-700">
                             <li>
@@ -117,7 +126,12 @@ export default function UserGameDetailPage() {
                     <div className="flex items-center gap-4 mb-6">
                         <span className="inline-block bg-yellow-300 rounded-full p-3 shadow-lg text-3xl">🗺️</span>
                         <h1 className="text-4xl font-extrabold text-brown-900 tracking-tight drop-shadow-lg">{game.title}</h1>
-                        <Link href={`/games/${game.id}/access`} className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-yellow-400 to-green-400 text-brown-900 font-extrabold rounded-lg shadow-lg hover:scale-105 hover:from-yellow-300 hover:to-green-300 transition-transform text-lg">
+                        <Link
+                            href={game.status === 'ACTIVE' ? `/games/${game.id}/access` : '#'}
+                            className={`inline-flex items-center gap-2 px-6 py-3 font-extrabold rounded-lg shadow-lg text-lg transition-transform ${game.status === 'ACTIVE' ? 'bg-gradient-to-r from-yellow-400 to-green-400 text-brown-900 hover:scale-105 hover:from-yellow-300 hover:to-green-300' : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60 pointer-events-none'}`}
+                            aria-disabled={game.status !== 'ACTIVE'}
+                            tabIndex={game.status === 'ACTIVE' ? 0 : -1}
+                        >
                             <span>Continue Game</span>
                             <span className="text-2xl">🧭</span>
                         </Link>
@@ -144,11 +158,19 @@ export default function UserGameDetailPage() {
                         </div>
                     )}
                     <div className="mb-8">
-                        <h2 className="text-2xl font-bold text-brown-900 mb-2 flex items-center gap-2">🧩 Progress Map</h2>
-                        {game.progress.length === 0 ? (
-                            <p className="text-gray-500">No progress yet. Your adventure awaits!</p>
-                        ) : (
+                        <h2 className="text-2xl font-bold text-brown-900 mb-2 flex items-center gap-2">🧩 Current Progress</h2>
+                        {latestProgress ? (
                             <div className="bg-white/80 rounded-lg shadow p-4 border-2 border-green-200">
+                                <span className="text-lg">🧭</span>
+                                <span>Level <b>{latestProgress.currentLevel}</b>, Stage <b>{latestProgress.currentStage}</b>, Hunt <b>{latestProgress.currentHunt}</b>, Clue <b>{latestProgress.currentClue}</b> {latestProgress.isCompleted && <span className="text-green-600 font-bold">(Completed)</span>}</span>
+                            </div>
+                        ) : (
+                            <p className="text-gray-500">No progress yet. Your adventure awaits!</p>
+                        )}
+                        {/* Optionally, show history below */}
+                        {game.progress.length > 1 && (
+                            <div className="mt-4">
+                                <h3 className="text-lg font-bold text-brown-800 mb-2">Progress History</h3>
                                 <ul className="list-none pl-0 text-brown-800 space-y-2">
                                     {game.progress.map((prog, idx) => (
                                         <li key={idx} className="flex items-center gap-2">
@@ -166,22 +188,41 @@ export default function UserGameDetailPage() {
                             <p className="text-gray-500">No badges earned in this game yet. Seek out hidden treasures!</p>
                         ) : (
                             <div className="flex flex-wrap gap-6">
-                                {game.badges.map((badge) => (
-                                    <div key={badge.id} className="flex items-center space-x-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg shadow p-3">
-                                        <div className="w-12 h-12 bg-yellow-200 rounded-full flex items-center justify-center border-2 border-yellow-400">
-                                            {badge.imageUrl ? (
-                                                <Image src={badge.imageUrl} alt={badge.name} width={40} height={40} className="w-10 h-10" />
-                                            ) : (
-                                                <span className="text-yellow-600 text-2xl">🏆</span>
-                                            )}
+                                {game.badges.map((badge: {
+                                    id: string;
+                                    name: string;
+                                    description: string;
+                                    imageUrl: string;
+                                    badgeType?: 'STAGE' | 'LEVEL';
+                                    levelNumber?: number;
+                                    stageNumber?: number | null;
+                                    earnedAt: string;
+                                }) => {
+                                    let badgeImg = badge.imageUrl;
+                                    if (!badgeImg || badgeImg === '') {
+                                        if (badge.badgeType === 'LEVEL' && badge.levelNumber) {
+                                            badgeImg = `/assets/badges/level${badge.levelNumber}_platinum.png`;
+                                        } else if (badge.badgeType === 'STAGE' && badge.levelNumber) {
+                                            badgeImg = `/assets/badges/level${badge.levelNumber}_stage${badge.stageNumber ?? 1}.png`;
+                                        }
+                                    }
+                                    return (
+                                        <div key={badge.id} className="flex items-center space-x-3 bg-yellow-50 border-2 border-yellow-300 rounded-lg shadow p-3">
+                                            <div className="w-12 h-12 bg-yellow-200 rounded-full flex items-center justify-center border-2 border-yellow-400">
+                                                {badgeImg ? (
+                                                    <Image src={badgeImg} alt={badge.name} width={40} height={40} className="w-10 h-10" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                                ) : (
+                                                    <span className="text-yellow-600 text-2xl">🏆</span>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="font-bold text-brown-900">{badge.name}</div>
+                                                <div className="text-sm text-brown-700">{badge.description}</div>
+                                                <div className="text-xs text-gray-500">Earned {new Date(badge.earnedAt).toLocaleDateString()}</div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div className="font-bold text-brown-900">{badge.name}</div>
-                                            <div className="text-sm text-brown-700">{badge.description}</div>
-                                            <div className="text-xs text-gray-500">Earned {new Date(badge.earnedAt).toLocaleDateString()}</div>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>

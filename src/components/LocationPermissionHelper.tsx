@@ -1,8 +1,9 @@
 import { showToast } from '@/lib/toast';
 import { useState } from 'react';
 
+import type { Location } from "../types/location";
 interface LocationPermissionHelperProps {
-    onLocationObtained: (location: { lat: number; lng: number }) => void
+    onLocationObtained: (location: Location) => void
     onError?: (error: string) => void
 }
 
