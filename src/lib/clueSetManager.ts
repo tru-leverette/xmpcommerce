@@ -37,10 +37,10 @@ export interface ClueExtended {
 export interface HuntWithClues extends Hunt {
     clues: ClueExtended[];
 }
-export async function getCluesForClueSet(clueSetId: string, levelNumber: number, stageNumber: number): Promise<HuntWithClues[]> {
-    // Find hunts for the clue set, level, and stage
+export async function getCluesForClueSet(clueSetId: string): Promise<HuntWithClues[]> {
+    // Find hunts for the clue set
     const huntsRaw = await prisma.hunt.findMany({
-        where: { clueSetId, levelNumber, stageNumber },
+        where: { clueSetId },
         include: {
             clues: {
                 orderBy: { clueNumber: 'asc' }

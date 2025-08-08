@@ -241,20 +241,16 @@ export async function handleTestAssignment({ gameId, decoded, prisma, NextRespon
     // Hunt lookup and creation by clueSetId, levelNumber, stageNumber
     let hunt: Hunt | null = await prisma.hunt.findFirst({
         where: {
-            clueSetId: clueSet.id,
-            levelNumber: currentLevel,
-            stageNumber: currentStage
+            clueSetId: clueSet.id
         }
     });
     if (!hunt) {
         hunt = await prisma.hunt.create({
             data: {
                 clueSetId: clueSet.id,
-                levelNumber: currentLevel,
-                stageNumber: currentStage,
                 huntNumber: 1,
-                name: `Hunt for ClueSet ${clueSet.name} Level ${currentLevel} Stage ${currentStage}`,
-                description: `Auto-generated hunt for ClueSet ${clueSet.name} Level ${currentLevel} Stage ${currentStage}`
+                name: `Hunt for ClueSet ${clueSet.name}`,
+                description: `Auto-generated hunt for ClueSet ${clueSet.name}`
             }
         });
     }

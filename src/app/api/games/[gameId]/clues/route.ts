@@ -46,7 +46,7 @@ export async function GET(
 
     if (clueSetId && levelNumber !== null && stageNumber !== null) {
       try {
-        const hunts = await getCluesForClueSet(clueSetId, levelNumber, stageNumber);
+        const hunts = await getCluesForClueSet(clueSetId);
         if (!hunts || hunts.length === 0) {
           return NextResponse.json({ error: 'NO_CLUES_AVAILABLE', message: 'No clues are available for this clue set, level, and stage.' }, { status: 200 });
         }
@@ -110,7 +110,7 @@ export async function GET(
         typeof currentProgress.currentStage === 'number'
       ) {
         try {
-          hunts = await getCluesForClueSet(participant.clueSetId, currentProgress.currentLevel, currentProgress.currentStage);
+          hunts = await getCluesForClueSet(participant.clueSetId);
           if (hunts.length > 0) {
             for (const hunt of hunts) {
               console.log('[DEBUG] Hunt:', hunt.id, 'Clues:', hunt.clues.length);

@@ -295,10 +295,8 @@ export async function DELETE(
       await tx.clue.deleteMany({
         where: {
           hunt: {
-            stage: {
-              level: {
-                gameId: gameId
-              }
+            clueSet: {
+              gameId: gameId
             }
           }
         }
@@ -307,10 +305,8 @@ export async function DELETE(
       // Delete hunts
       await tx.hunt.deleteMany({
         where: {
-          stage: {
-            level: {
-              gameId: gameId
-            }
+          clueSet: {
+            gameId: gameId
           }
         }
       })
@@ -348,20 +344,7 @@ export async function DELETE(
       })
 
       // Delete stages
-      await tx.stage.deleteMany({
-        where: {
-          level: {
-            gameId: gameId
-          }
-        }
-      })
-
-      // Delete levels
-      await tx.level.deleteMany({
-        where: {
-          gameId: gameId
-        }
-      })
+      // Stages and levels removed from schema, no longer need to delete
 
       // Finally delete the game
       await tx.game.delete({
